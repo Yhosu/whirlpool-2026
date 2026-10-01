@@ -19,7 +19,7 @@
         "/register-participant": {
             "post": {
                 "operationId": "registerParticipant",
-                "description": "Registra un nuevo participante y sus ventas en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS, generando sus intentos disponibles para la ruleta/lavadora.",
+                "description": "Registra un nuevo participante y sus compras para la promoci\u00f3n **WHIRLPOOL SPECIAL DAYS**, generando los intentos disponibles para participar en la ruleta / lavadora.\n\n### Explicaci\u00f3n de los campos devueltos en `data`:\n- `total_attempts` *(int)* \ud83d\udfe2 **`NUEVO`**: **Cantidad total de intentos/giros disponibles** para el participante en la promoci\u00f3n Whirlpool.\n  - Representa el n\u00famero de formularios registrados v\u00e1lidos listos para girar.\n  - Solo contabiliza formularios con estado `registered`.\n  - **No contabiliza** formularios en estado `used` (ya utilizados en un giro previo), `invalidated` (invalidados/anulados) ni `pending` (pendientes de aprobaci\u00f3n administrativa).\n- `message_promotion` *(string)* \ud83d\udfe2 **`NUEVO`**: **Mensaje din\u00e1mico informativo** personalizado para el usuario final seg\u00fan sus intentos disponibles:\n  - Si tiene intentos disponibles (> 0): *\"\u00a1Felicidades! Usted gener\u00f3 X intento(s) en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS por la compra de su(s) producto(s) de la marca WHIRLPOOL.\"*\n  - Si no gener\u00f3 intentos: *\"\u00a1Gracias por su participaci\u00f3n!\"*\n- `generate_participant_code` *(string)*: Identificador \u00fanico (UUID) asignado al participante registrado.\n- `participant_link` *(string)*: URL p\u00fablica directa a la interfaz de juego (`/participate/{ci}`) para que el usuario gire la lavadora.\n- `participant_name` *(string)*: Nombre completo del cliente registrado.\n- `participant_email` *(string|null)*: Correo electr\u00f3nico registrado.\n- `participant_ci` *(string)*: Carnet de identidad o documento de identidad del participante.",
                 "summary": "Registrar Participante",
                 "tags": [
                     "App"
@@ -68,28 +68,35 @@
                                             "type": "object",
                                             "properties": {
                                                 "generate_participant_code": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Identificador \u00fanico (UUID) asignado al participante registrado."
                                                 },
                                                 "participant_link": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Enlace web directo para que el participante ingrese a la ruleta/lavadora con su carnet."
                                                 },
                                                 "participant_name": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Nombre completo del participante registrado."
                                                 },
                                                 "participant_email": {
                                                     "type": [
                                                         "string",
                                                         "null"
-                                                    ]
+                                                    ],
+                                                    "description": "Correo electr\u00f3nico del participante (puede ser null)."
                                                 },
                                                 "participant_ci": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Carnet o documento de identidad del participante."
                                                 },
                                                 "total_attempts": {
-                                                    "type": "integer"
+                                                    "type": "integer",
+                                                    "description": "\ud83d\udfe2 [NUEVO] Cantidad de giros/intentos disponibles en la promoci\u00f3n Whirlpool (formularios en estado \"registered\"). Excluye los estados \"used\", \"invalidated\" y \"pending\"."
                                                 },
                                                 "message_promotion": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "\ud83d\udfe2 [NUEVO] Mensaje promocional din\u00e1mico informativo indicando la cantidad de intentos generados o disponibles."
                                                 }
                                             },
                                             "required": [
@@ -201,7 +208,7 @@
         "/participant/{ciNumber}": {
             "get": {
                 "operationId": "getDataParticipant",
-                "description": "Busca un participante por su CI y retorna sus datos e intentos disponibles en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS.",
+                "description": "Consulta el estado actual de un participante mediante su CI y devuelve sus datos junto con los giros/intentos disponibles en la promoci\u00f3n **WHIRLPOOL SPECIAL DAYS**.\n\n### Explicaci\u00f3n de los campos devueltos en `data`:\n- `total_attempts` *(int)* \ud83d\udfe2 **`NUEVO`**: **Cantidad de intentos/giros disponibles y vigentes** que el cliente tiene en la promoci\u00f3n para participar en la ruleta/lavadora.\n  - Se calcula contando los formularios asociados a la CI que se encuentren estrictamente en estado `registered`.\n  - Formularios en estado `used` (ya girados mediante el WS), `invalidated` (anulados) o `pending` (a\u00fan en revisi\u00f3n manual) **no son contabilizados**.\n  - Cuando el usuario realiza su giro mediante el Web Service, el formulario se actualiza a `used` y se descuenta autom\u00e1ticamente de este contador.\n- `message_promotion` *(string)* \ud83d\udfe2 **`NUEVO`**: **Mensaje de estado para el cliente**:\n  - Con intentos disponibles (> 0): *\"\u00a1Felicidades! Usted cuenta con X intento(s) disponible(s) en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS.\"*\n  - Sin intentos disponibles (= 0): *\"No cuenta con intentos disponibles en este momento.\"*\n- `generate_participant_code` *(string)*: Identificador \u00fanico (UUID) del participante.\n- `participant_link` *(string)*: URL directa al juego de la ruleta/lavadora (`/participate/{ci}`).\n- `participant_name` *(string)*: Nombre del cliente.\n- `participant_email` *(string|null)*: Correo electr\u00f3nico del cliente.\n- `participant_ci` *(string)*: N\u00famero de carnet de identidad consultado.",
                 "summary": "Obtener Datos del Participante",
                 "tags": [
                     "App"
@@ -250,28 +257,35 @@
                                             "type": "object",
                                             "properties": {
                                                 "generate_participant_code": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Identificador \u00fanico (UUID) asignado al participante registrado."
                                                 },
                                                 "participant_link": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Enlace web directo para que el participante ingrese a la ruleta/lavadora con su carnet."
                                                 },
                                                 "participant_name": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Nombre completo del participante registrado."
                                                 },
                                                 "participant_email": {
                                                     "type": [
                                                         "string",
                                                         "null"
-                                                    ]
+                                                    ],
+                                                    "description": "Correo electr\u00f3nico del participante (puede ser null)."
                                                 },
                                                 "participant_ci": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "Carnet o documento de identidad del participante."
                                                 },
                                                 "total_attempts": {
-                                                    "type": "integer"
+                                                    "type": "integer",
+                                                    "description": "\ud83d\udfe2 [NUEVO] Cantidad de giros/intentos disponibles en la promoci\u00f3n Whirlpool (formularios en estado \"registered\"). Excluye los estados \"used\", \"invalidated\" y \"pending\"."
                                                 },
                                                 "message_promotion": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "description": "\ud83d\udfe2 [NUEVO] Mensaje promocional din\u00e1mico informativo indicando la cantidad de intentos generados o disponibles."
                                                 }
                                             },
                                             "required": [

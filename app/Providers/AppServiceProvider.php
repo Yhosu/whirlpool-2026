@@ -66,19 +66,41 @@ class AppServiceProvider extends ServiceProvider
             $scheme->as('apiKey');
 
             $openApi->secure($scheme);
-        });
 
-        /*
-        // Limpieza final del spec generado para evitar filtraciones por inferencia
-        Scramble::configure()->withDocumentTransformers(function (array $openApi) {
-            $sensitiveKey = config('services.dismac.secret_key');
-            if (!$sensitiveKey) return $openApi;
+            $fieldDescriptions = [
+                'generate_participant_code' => 'Identificador único (UUID) asignado al participante registrado.',
+                'participant_link' => 'Enlace web directo para que el participante ingrese a la ruleta/lavadora con su carnet.',
+                'participant_name' => 'Nombre completo del participante registrado.',
+                'participant_email' => 'Correo electrónico del participante (puede ser null).',
+                'participant_ci' => 'Carnet o documento de identidad del participante.',
+                'total_attempts' => '🟢 [NUEVO] Cantidad de giros/intentos disponibles en la promoción Whirlpool (formularios en estado "registered"). Excluye los estados "used", "invalidated" y "pending".',
+                'message_promotion' => '🟢 [NUEVO] Mensaje promocional dinámico informativo indicando la cantidad de intentos generados o disponibles.',
+            ];
 
-            // Buscamos y reemplazamos cualquier rastro de la key real en el JSON final
-            $json = json_encode($openApi);
-            $json = str_replace($sensitiveKey, 'XXXXX', $json);
-            return json_decode($json, true);
+            foreach ($openApi->paths as $path) {
+                foreach ($path->operations as $operation) {
+                    foreach ($operation->responses as $response) {
+                        if (($response->code ?? null) != 200) {
+                            continue;
+                        }
+                        $schema = $response->content['application/json'] ?? null;
+                        if (! $schema) {
+                            continue;
+                        }
+                        $type = $schema->type ?? null;
+                        if ($type instanceof \Dedoc\Scramble\Support\Generator\Types\ObjectType) {
+                            $dataType = $type->properties['data'] ?? null;
+                            if ($dataType instanceof \Dedoc\Scramble\Support\Generator\Types\ObjectType) {
+                                foreach ($fieldDescriptions as $field => $desc) {
+                                    if (isset($dataType->properties[$field])) {
+                                        $dataType->properties[$field]->setDescription($desc);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
-        */
     }
 }

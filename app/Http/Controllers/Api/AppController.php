@@ -31,7 +31,21 @@ class AppController extends Controller
     /**
      * Registrar Participante
      *
-     * Registra un nuevo participante y sus ventas en la promoción WHIRLPOOL SPECIAL DAYS, generando sus intentos disponibles para la ruleta/lavadora.
+     * Registra un nuevo participante y sus compras para la promoción **WHIRLPOOL SPECIAL DAYS**, generando los intentos disponibles para participar en la ruleta / lavadora.
+     *
+     * ### Explicación de los campos devueltos en `data`:
+     * - `total_attempts` *(int)* 🟢 **`NUEVO`**: **Cantidad total de intentos/giros disponibles** para el participante en la promoción Whirlpool.
+     *   - Representa el número de formularios registrados válidos listos para girar.
+     *   - Solo contabiliza formularios con estado `registered`.
+     *   - **No contabiliza** formularios en estado `used` (ya utilizados en un giro previo), `invalidated` (invalidados/anulados) ni `pending` (pendientes de aprobación administrativa).
+     * - `message_promotion` *(string)* 🟢 **`NUEVO`**: **Mensaje dinámico informativo** personalizado para el usuario final según sus intentos disponibles:
+     *   - Si tiene intentos disponibles (> 0): *"¡Felicidades! Usted generó X intento(s) en la promoción WHIRLPOOL SPECIAL DAYS por la compra de su(s) producto(s) de la marca WHIRLPOOL."*
+     *   - Si no generó intentos: *"¡Gracias por su participación!"*
+     * - `generate_participant_code` *(string)*: Identificador único (UUID) asignado al participante registrado.
+     * - `participant_link` *(string)*: URL pública directa a la interfaz de juego (`/participate/{ci}`) para que el usuario gire la lavadora.
+     * - `participant_name` *(string)*: Nombre completo del cliente registrado.
+     * - `participant_email` *(string|null)*: Correo electrónico registrado.
+     * - `participant_ci` *(string)*: Carnet de identidad o documento de identidad del participante.
      *
      * @return array{process: bool, message: string, data: array{generate_participant_code: string, participant_link: string, participant_name: string, participant_email: string|null, participant_ci: string, total_attempts: int, message_promotion: string}, errors: array<int, string>}
      */
@@ -114,7 +128,21 @@ class AppController extends Controller
     /**
      * Obtener Datos del Participante
      *
-     * Busca un participante por su CI y retorna sus datos e intentos disponibles en la promoción WHIRLPOOL SPECIAL DAYS.
+     * Consulta el estado actual de un participante mediante su CI y devuelve sus datos junto con los giros/intentos disponibles en la promoción **WHIRLPOOL SPECIAL DAYS**.
+     *
+     * ### Explicación de los campos devueltos en `data`:
+     * - `total_attempts` *(int)* 🟢 **`NUEVO`**: **Cantidad de intentos/giros disponibles y vigentes** que el cliente tiene en la promoción para participar en la ruleta/lavadora.
+     *   - Se calcula contando los formularios asociados a la CI que se encuentren estrictamente en estado `registered`.
+     *   - Formularios en estado `used` (ya girados mediante el WS), `invalidated` (anulados) o `pending` (aún en revisión manual) **no son contabilizados**.
+     *   - Cuando el usuario realiza su giro mediante el Web Service, el formulario se actualiza a `used` y se descuenta automáticamente de este contador.
+     * - `message_promotion` *(string)* 🟢 **`NUEVO`**: **Mensaje de estado para el cliente**:
+     *   - Con intentos disponibles (> 0): *"¡Felicidades! Usted cuenta con X intento(s) disponible(s) en la promoción WHIRLPOOL SPECIAL DAYS."*
+     *   - Sin intentos disponibles (= 0): *"No cuenta con intentos disponibles en este momento."*
+     * - `generate_participant_code` *(string)*: Identificador único (UUID) del participante.
+     * - `participant_link` *(string)*: URL directa al juego de la ruleta/lavadora (`/participate/{ci}`).
+     * - `participant_name` *(string)*: Nombre del cliente.
+     * - `participant_email` *(string|null)*: Correo electrónico del cliente.
+     * - `participant_ci` *(string)*: Número de carnet de identidad consultado.
      *
      * @return array{process: bool, message: string, data: array{generate_participant_code: string, participant_link: string, participant_name: string, participant_email: string|null, participant_ci: string, total_attempts: int, message_promotion: string}, errors: array<int, string>}
      */
