@@ -1,0 +1,8 @@
+@import url("./resources/css/vendors/vendors.min.css");
+@import url("./resources/css/vendors/forms/select/select2.min.css");
+@import url("./resources/css/vendors/animate/animate.min.css");
+@import url("./resources/css/vendors/extensions/sweetalert2.min.css");
+@import url("./resources/css/vendors/tables/datatable/dataTables.bootstrap5.min.css");
+@import url("./resources/css/vendors/tables/datatable/responsive.bootstrap5.min.css");
+@import url("./resources/css/vendors/tables/datatable/buttons.bootstrap5.min.css");
+@import url("./resources/css/vendors/tables/datatable/rowGroup.bootstrap5.min.css");

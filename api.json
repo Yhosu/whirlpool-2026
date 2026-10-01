@@ -1,0 +1,489 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Promo Whirlpool API Docs",
+        "version": "0.0.1",
+        "description": "Documentaci\u00f3n oficial de la API REST para la promoci\u00f3n WHIRLPOOL SPECIAL DAYS."
+    },
+    "servers": [
+        {
+            "url": "http://hisense.test/api"
+        }
+    ],
+    "security": [
+        {
+            "apiKey": []
+        }
+    ],
+    "paths": {
+        "/register-participant": {
+            "post": {
+                "operationId": "registerParticipant",
+                "description": "Registra un nuevo participante y sus ventas en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS, generando sus intentos disponibles para la ruleta/lavadora.",
+                "summary": "Registrar Participante",
+                "tags": [
+                    "App"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterParticipantRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Participante registrado con \u00e9xito",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "examples": [
+                                        {
+                                            "process": true,
+                                            "message": "Participante registrado con \u00e9xito.",
+                                            "data": {
+                                                "generate_participant_code": "b7e28938-1a52-4f1e-9276-32454a867b32",
+                                                "participant_link": "https://promociones.dismac.com.bo/participate/12345678",
+                                                "participant_name": "Juan P\u00e9rez",
+                                                "participant_email": "juan.perez@example.com",
+                                                "participant_ci": "12345678",
+                                                "total_attempts": 1,
+                                                "message_promotion": "\u00a1Felicidades! Usted gener\u00f3 1 intento(s) en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS por la compra de su(s) producto(s) de la marca WHIRLPOOL."
+                                            },
+                                            "errors": []
+                                        }
+                                    ],
+                                    "properties": {
+                                        "process": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "generate_participant_code": {
+                                                    "type": "string"
+                                                },
+                                                "participant_link": {
+                                                    "type": "string"
+                                                },
+                                                "participant_name": {
+                                                    "type": "string"
+                                                },
+                                                "participant_email": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "participant_ci": {
+                                                    "type": "string"
+                                                },
+                                                "total_attempts": {
+                                                    "type": "integer"
+                                                },
+                                                "message_promotion": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "generate_participant_code",
+                                                "participant_link",
+                                                "participant_name",
+                                                "participant_email",
+                                                "participant_ci",
+                                                "total_attempts",
+                                                "message_promotion"
+                                            ]
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "process",
+                                        "message",
+                                        "data",
+                                        "errors"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Error de validaci\u00f3n de campos",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "examples": [
+                                        {
+                                            "process": false,
+                                            "message": "Error en el env\u00edo de par\u00e1metros",
+                                            "errors": [
+                                                "El carnet de identidad es obligatorio.",
+                                                "La ciudad es obligatoria"
+                                            ],
+                                            "data": []
+                                        }
+                                    ],
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "description": "Errors overview."
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "description": "A detailed description of each field that failed validation.",
+                                            "additionalProperties": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "errors"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Error en los par\u00e1metros o participante no permitido",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "examples": [
+                                        {
+                                            "process": false,
+                                            "message": "Error al crear el participante",
+                                            "errors": [
+                                                "Este participante no puede participar de esta promoci\u00f3n."
+                                            ],
+                                            "data": []
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "API Key inv\u00e1lida",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "examples": [
+                                        {
+                                            "message": "Unauthorized: Invalid or missing API Key"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/participant/{ciNumber}": {
+            "get": {
+                "operationId": "getDataParticipant",
+                "description": "Busca un participante por su CI y retorna sus datos e intentos disponibles en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS.",
+                "summary": "Obtener Datos del Participante",
+                "tags": [
+                    "App"
+                ],
+                "parameters": [
+                    {
+                        "name": "ciNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Participante obtenido con \u00e9xito",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "examples": [
+                                        {
+                                            "process": true,
+                                            "message": "Participante obtenido con \u00e9xito.",
+                                            "data": {
+                                                "generate_participant_code": "b7e28938-1a52-4f1e-9276-32454a867b32",
+                                                "participant_link": "https://promociones.dismac.com.bo/participate/12345678",
+                                                "participant_name": "Juan P\u00e9rez",
+                                                "participant_email": "juan.perez@example.com",
+                                                "participant_ci": "12345678",
+                                                "total_attempts": 1,
+                                                "message_promotion": "\u00a1Felicidades! Usted cuenta con 1 intento(s) disponible(s) en la promoci\u00f3n WHIRLPOOL SPECIAL DAYS."
+                                            },
+                                            "errors": []
+                                        }
+                                    ],
+                                    "properties": {
+                                        "process": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "generate_participant_code": {
+                                                    "type": "string"
+                                                },
+                                                "participant_link": {
+                                                    "type": "string"
+                                                },
+                                                "participant_name": {
+                                                    "type": "string"
+                                                },
+                                                "participant_email": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "participant_ci": {
+                                                    "type": "string"
+                                                },
+                                                "total_attempts": {
+                                                    "type": "integer"
+                                                },
+                                                "message_promotion": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "generate_participant_code",
+                                                "participant_link",
+                                                "participant_name",
+                                                "participant_email",
+                                                "participant_ci",
+                                                "total_attempts",
+                                                "message_promotion"
+                                            ]
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "process",
+                                        "message",
+                                        "data",
+                                        "errors"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Participante no encontrado o error en la consulta",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "examples": [
+                                        {
+                                            "process": false,
+                                            "message": "Error al obtener el participante",
+                                            "errors": [
+                                                "El participante no se encuentra registrado."
+                                            ],
+                                            "data": []
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "API Key inv\u00e1lida",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "examples": [
+                                        {
+                                            "message": "Unauthorized: Invalid or missing API Key"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "apiKey": {
+                "type": "apiKey",
+                "description": "Clave secreta requerida para autenticar todas las solicitudes a la API. Solic\u00edtala al administrador.",
+                "in": "header",
+                "name": "X-API-KEY",
+                "x-default": "XXXXX"
+            }
+        },
+        "schemas": {
+            "RegisterParticipantRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "cellphone": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "birth_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "ci_number": {
+                        "type": "string"
+                    },
+                    "business_unit": {
+                        "type": "string",
+                        "enum": [
+                            "ECO",
+                            "RET",
+                            "ACE"
+                        ]
+                    },
+                    "control_code": {
+                        "type": "string"
+                    },
+                    "ci_number_complement": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "sale_type": {
+                        "type": "string",
+                        "enum": [
+                            "CONTADO",
+                            "MINICUOTAS"
+                        ]
+                    },
+                    "city": {
+                        "type": "string"
+                    },
+                    "city_agency": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "total_amount": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "invoice_number": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "invoice_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "sale_date": {
+                        "type": "string"
+                    },
+                    "document_type": {
+                        "type": "string",
+                        "enum": [
+                            "CI",
+                            "NIT",
+                            "PE"
+                        ]
+                    },
+                    "sale_items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "code_brand": {
+                                    "type": "string"
+                                },
+                                "amount": {
+                                    "type": "string",
+                                    "minLength": 1
+                                },
+                                "name": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "quantity": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ],
+                                    "minimum": 1
+                                }
+                            },
+                            "required": [
+                                "code_brand",
+                                "amount"
+                            ]
+                        },
+                        "minItems": 1
+                    }
+                },
+                "required": [
+                    "name",
+                    "ci_number",
+                    "business_unit",
+                    "control_code",
+                    "sale_type",
+                    "city",
+                    "city_agency",
+                    "total_amount",
+                    "sale_date",
+                    "document_type",
+                    "sale_items"
+                ],
+                "title": "RegisterParticipantRequest"
+            }
+        }
+    }
+}

@@ -1,0 +1,49 @@
+.logo-holder img {
+	height: 30px;
+}
+
+.footer-logo img {
+	width: 156px;
+    height: auto;
+}
+
+.nav-button span {
+	background: white;
+}
+
+.whatsapp__btn-content {
+	position: fixed;
+    bottom: 4%;
+    right: 0.5%;
+    z-index: 2;
+	.whatsapp__btn {
+		width: 60px;
+		height: 60px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		background: #00b66c;
+		color: white;
+		opacity: 0.6;
+		transition: all ease 0.26s;
+		&:hover {
+			opacity: 1;
+		}
+		i {
+			font-size: 2.5rem;
+		}
+	}
+}
+.content__image {
+	width: 400px;
+	max-width: 100%;
+	display: block;
+	img {
+		width: 100%;
+		height: auto;
+		aspect-ratio: 1 / 1;
+		object-fit: scale-down;
+		object-position: center;
+	}
+}

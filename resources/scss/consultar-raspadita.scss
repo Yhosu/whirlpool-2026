@@ -1,0 +1,433 @@
+.consultar-raspadita-wrapper {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f7f9fa; /* generic light background fallback */
+    font-family: inherit;
+
+    h1, h2, h3, p, label {
+        margin: 0;
+    }
+
+    .landing {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .image-container {
+        position: relative;
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+
+        .image-back {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        form {
+            position: relative;
+            z-index: 2;
+            width: 90%;
+            max-width: 600px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+
+            margin-top: 50px;
+            margin-bottom: 50px;
+
+            img {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+
+            .logo-1 {
+                max-width: 120px;
+                margin: 0 auto 20px auto;
+                display: block;
+            }
+
+            .form-control {
+                display: flex;
+                flex-direction: column;
+
+                label {
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-bottom: 5px;
+                    color: #333;
+                }
+
+                input {
+                    padding: 12px 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    font-size: 16px;
+                    transition: border 0.3s;
+                    &:focus {
+                        border-color: #00aa38;
+                        outline: none;
+                    }
+                }
+            }
+
+            button {
+                margin-top: 10px;
+                padding: 12px;
+                background-color: #00aa38;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: background 0.3s;
+
+                &:hover {
+                    background-color: #008a2e;
+                }
+            }
+        }
+
+        // --- Estilos para la Tarjeta Raspadita (Results) ---
+        .result-box {
+            position: relative;
+            z-index: 2;
+            width: 95%; 
+            max-width: 420px; 
+            padding: 15px; 
+            background: rgba(255, 255, 255, 0.90);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+
+            &.grid-mode {
+                max-width: 750px;
+                background: transparent;
+                box-shadow: none;
+                padding: 0;
+            }
+
+            @media (max-width: 768px) {
+                padding: 10px;
+                &.grid-mode {
+                    padding: 0;
+                }
+            }
+        }
+
+        .raspaditas-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            column-gap: 50px;
+            row-gap: 25px;
+            width: 100%;
+            margin-bottom: 20px;
+            align-items: start;
+
+            @media (max-width: 768px) {
+                grid-template-columns: 1fr;
+                row-gap: 20px;
+            }
+
+            .scratch-card-container {
+                max-width: 340px; 
+                margin: 0 auto;
+                padding: 10px;
+                min-height: 190px;
+
+                @media (max-width: 768px) {
+                    max-width: 420px; 
+                }
+
+                &.golden-ticket {
+                    .ticket-header {
+                        .ticket-logo-consul {
+                            font-size: 1.1rem;
+                            @media (max-width: 768px) { font-size: 1.6rem; }
+                        }
+                        .ticket-year {
+                            font-size: 0.8rem;
+                            @media (max-width: 768px) { font-size: 1.1rem; }
+                        }
+                    }
+
+                    .ticket-body {
+                        .ticket-instruction {
+                            font-size: 0.65rem;
+                            @media (max-width: 768px) { font-size: 0.85rem; }
+                        }
+                        .ticket-main-title {
+                            font-size: 1.1rem;
+                            @media (max-width: 768px) { font-size: 1.8rem; }
+                        }
+                        .scratch-area {
+                            height: 40px;
+                            width: 85%;
+                            @media (max-width: 768px) { height: 50px; width: 70%; }
+                        }
+                    }
+
+                    .ticket-footer {
+                        gap: 4px;
+                        .ticket-footer-left {
+                            flex: 0 0 20%;
+                            .ticket-aj-logo {
+                                height: 20px;
+                                @media (max-width: 768px) { height: 35px; }
+                            }
+                        }
+                        .ticket-footer-right {
+                            flex: 0 0 80%;
+                            font-size: 0.35rem;
+                            @media (max-width: 768px) { font-size: 0.48rem; }
+                        }
+                    }
+                }
+            }
+
+            .hidden-code {
+                font-size: 0.75rem;
+                @media (max-width: 768px) { font-size: 1rem; }
+            }
+
+            .prize-name {
+                font-size: 1rem;
+                @media (max-width: 768px) { font-size: 1.3rem; }
+            }
+        }
+
+        .scratch-card-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%; /* Fill the container space */
+            min-height: 170px; 
+            border-radius: 4px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px; 
+            margin: 0 auto;
+            overflow: hidden;
+
+            &.golden-ticket {
+                font-family: 'Montserrat', sans-serif !important;
+                color: #5c1010;
+
+                .ticket-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    z-index: 5;
+
+                    .ticket-logo-consul {
+                        font-size: 1.6rem; /* Scaled down further */
+                        font-weight: 800; /* Distinct Montserrat Weight */
+                        color: #ffffff;
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                        line-height: 1;
+                    }
+
+                    .ticket-year {
+                        font-size: 1.1rem; /* Scaled down further */
+                        font-weight: 800;
+                        color: rgba(109, 68, 24, 0.4);
+                    }
+                }
+
+                .ticket-body {
+                    text-align: center;
+                    z-index: 5;
+                    margin: 3px 0;
+
+                    .ticket-instruction {
+                        font-size: 0.85rem; /* Scaled down further */
+                        font-weight: 600;
+                        margin-bottom: -3px;
+                        color: #5c1010;
+                    }
+
+                    .ticket-main-title {
+                        font-size: 1.8rem; /* Scaled down further */
+                        font-weight: 800;
+                        margin-bottom: 8px;
+                        color: #5c1010;
+                        letter-spacing: -1px;
+                        text-shadow: 1px 1px 0px rgba(255,255,255,0.2);
+                        line-height: 1.1;
+                    }
+
+                    .scratch-area {
+                        background-color: #ffffff;
+                        height: 50px; /* Scaled down further */
+                        width: 70%;
+                        margin: 0 auto;
+                        border-radius: 4px;
+                    }
+                }
+
+                .ticket-footer {
+                    display: flex;
+                    align-items: flex-end;
+                    gap: 8px; /* Reduced gap */
+                    z-index: 5;
+                    margin-top: 8px;
+                    width: 100%;
+
+                    .ticket-footer-left {
+                        flex: 0 0 25%; /* Reduced from 30% */
+                        display: flex;
+                        justify-content: flex-start;
+                        .ticket-aj-logo {
+                            height: 35px;
+                            width: auto;
+                            max-width: 100%;
+                            object-fit: contain;
+                            margin-left: -5px; /* Slight shift to the left */
+                        }
+                    }
+
+                    .ticket-footer-right {
+                        flex: 0 0 75%; /* Increased from 70% */
+                        font-size: 0.48rem;
+                        line-height: 1.25;
+                        text-align: left;
+                        p {
+                            margin: 0;
+                            color: #4a2c2a;
+                            text-align: justify;
+                            font-weight: 500;
+                        }
+                        b, strong {
+                            font-weight: 800;
+                            color: #4a2c2a;
+                        }
+                    }
+                }
+            }
+        }
+
+        .scratch-logo {
+            width: 120px;
+        }
+
+        .scratch-title {
+            color: white;
+            text-align: right;
+            font-family: inherit;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .scratch-area {
+            position: relative;
+            width: 100%;
+            height: 70px;
+            background-color: #ffffff;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .hidden-code-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            user-select: none;
+            width: 100%;
+            padding: 5px 0;
+        }
+
+        .hidden-code {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #777;
+            letter-spacing: 1.2px;
+            font-family: inherit;
+
+            @media (max-width: 400px) {
+                font-size: 0.85rem;
+                letter-spacing: 1px;
+            }
+        }
+
+        .prize-name {
+            font-size: 1.3rem;
+            font-weight: 900;
+            color: #e31b23;
+            text-transform: uppercase;
+            margin-top: 2px;
+            line-height: 1.1;
+            text-align: center;
+
+            @media (max-width: 400px) {
+                font-size: 1.1rem;
+            }
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            z-index: 10;
+            touch-action: none;
+        }
+    }
+}
+
+// Boton de Whatsapp Global Float
+.whatsapp-float {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    bottom: 30px;
+    right: 30px;
+    background-color: #25d366;
+    color: #FFF;
+    border-radius: 50px;
+    text-align: center;
+    font-size: 35px;
+    box-shadow: 2px 2px 15px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+    &:hover {
+        transform: scale(1.1);
+        color: #FFF;
+        box-shadow: 2px 2px 20px rgba(37, 211, 102, 0.4);
+    }
+}

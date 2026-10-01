@@ -1,0 +1,1 @@
+<h1>No se encontraron propiedades</h1>

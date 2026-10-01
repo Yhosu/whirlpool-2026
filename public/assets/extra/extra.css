@@ -1,0 +1,66 @@
+.respimg-two {
+	width: 100%;
+    height: 350px !important;
+}
+
+.testi-avatar-litle-margin {
+    margin-top: 8px !important
+}
+
+.extra-thumbnail {
+    max-width: 170px;
+    max-height: 170px;
+    padding-top: 15px !important;
+}
+
+.map-view-wrap_item_md {
+	position:relative;
+	float:left;
+	width:420px;
+	background:#f9f9f9;
+	top:220px;
+}
+
+.dec-img {
+    position: relative;
+    display: inline-table;
+    width: 80px;
+    height: 80px;    
+}
+.caption__image {
+    position: absolute; bottom: -5px !important; right: 16px; z-index:1000
+}
+.caption__centered {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.caption__image p {
+    font-size: 1.35em !important;
+}
+.caption__centered a p {
+    font-size: 1.35em !important;
+}
+.titlefont__menu {
+    font-size: 1.75em !important;
+    color: white;
+}
+.events-font__size {
+    font-size: 1.15em !important;
+}
+.form-font__size {
+    font-size: 1.5em !important;
+}
+.event-carousel-item {
+    font-family: 'Poppins', sans-serif !important;
+}
+.lazyLoad {
+    width: 100%;
+    opacity: 0;
+}
+
+.visible {
+    transition: opacity 1000ms ease;
+    opacity: 1;
+}
