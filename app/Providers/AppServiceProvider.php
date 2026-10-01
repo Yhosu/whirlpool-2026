@@ -73,7 +73,7 @@ class AppServiceProvider extends ServiceProvider
                 'participant_name' => 'Nombre completo del participante registrado.',
                 'participant_email' => 'Correo electrónico del participante (puede ser null).',
                 'participant_ci' => 'Carnet o documento de identidad del participante.',
-                'total_attempts' => '🟢 [NUEVO] Cantidad de giros/intentos disponibles en la promoción Whirlpool (formularios en estado "registered"). Excluye los estados "used", "invalidated" y "pending".',
+                'total_attempts' => '🟢 [NUEVO] Cantidad de giros/intentos disponibles en la promoción Whirlpool (formularios en estado "registered").',
                 'message_promotion' => '🟢 [NUEVO] Mensaje promocional dinámico informativo indicando la cantidad de intentos generados o disponibles.',
             ];
 
