@@ -76,6 +76,7 @@ class AppServiceProvider extends ServiceProvider
                 'total_attempts' => '🟢 [NUEVO] Cantidad de giros/intentos disponibles en la promoción Whirlpool (formularios en estado "registered").',
                 'message_promotion' => '🟢 [NUEVO] Mensaje promocional dinámico informativo indicando la cantidad de intentos generados o disponibles.',
             ];
+            
 
             foreach ($openApi->paths as $path) {
                 foreach ($path->operations as $operation) {
