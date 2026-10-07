@@ -74,4 +74,10 @@ final class Form extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+
+    public function participant(): BelongsTo
+    {
+        return $this->belongsTo(Participant::class, 'participant_id');
+    }
 }
+

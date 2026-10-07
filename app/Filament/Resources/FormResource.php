@@ -143,14 +143,32 @@ class FormResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'registered' => 'Registrado',
+                        'pending' => 'Pendiente',
+                        'used' => 'Utilizado',
                         'invalidated' => 'Invalidado',
                         'delivered' => 'Entregado',
                         default => ucfirst($state),
                     })
                     ->color(fn (string $state): string => match ($state) {
                         'registered' => 'warning',
+                        'pending' => 'info',
+                        'used' => 'primary',
                         'invalidated' => 'danger',
                         'delivered' => 'success',
+                        default => 'gray',
+                    })
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Tipo')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'dismac' => 'Dismac',
+                        'informal-market' => 'Mercado Informal',
+                        default => $state ? ucfirst($state) : '-',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        'dismac' => 'primary',
+                        'informal-market' => 'warning',
                         default => 'gray',
                     })
                     ->sortable(),
@@ -216,8 +234,16 @@ class FormResource extends Resource
                     ->label('Estado')
                     ->options([
                         'registered' => 'Registrado',
+                        'pending' => 'Pendiente',
+                        'used' => 'Utilizado',
                         'invalidated' => 'Invalidado',
                         'delivered' => 'Entregado',
+                    ]),
+                Tables\Filters\SelectFilter::make('type')
+                    ->label('Tipo de Registro')
+                    ->options([
+                        'dismac' => 'Dismac',
+                        'informal-market' => 'Mercado Informal',
                     ]),
                 Tables\Filters\SelectFilter::make('city')
                     ->label('Ciudad')
@@ -296,6 +322,64 @@ class FormResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('validar')
+                    ->label('Validar')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (FormModel $record) => 'Validar Formulario: '.$record->name)
+                    ->modalDescription(function (FormModel $record) {
+                        $invoiceLink = $record->invoice_url ?: ($record->invoice_image ? (str_starts_with($record->invoice_image, 'http') ? $record->invoice_image : asset('storage/'.$record->invoice_image)) : '#');
+                        $invoiceHtml = $invoiceLink !== '#' ? "<a href='{$invoiceLink}' target='_blank' style='color: #00aa38; text-decoration: underline; font-weight: bold;'>🔍 Ver Factura / Comprobante Adjunto</a>" : "<span style='color: #666;'>Sin adjunto</span>";
+
+                        return new HtmlString("
+                            <div style='padding: 1.2rem; background-color: #f7fffa; border-left: 4px solid #00aa38; border-radius: 8px; font-size: 0.95rem; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);'>
+                                <h4 style='margin: 0 0 8px 0; font-weight: bold; color: #111;'>👤 {$record->name}</h4>
+                                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.9rem;'>
+                                    <p style='margin: 0; color: #444;'><b>🎫 CI:</b> {$record->ci_number}</p>
+                                    <p style='margin: 0; color: #444;'><b>📱 Celular:</b> {$record->cellphone}</p>
+                                    <p style='margin: 0; color: #444;'><b>📍 Ciudad:</b> {$record->city}</p>
+                                    <p style='margin: 0; color: #444;'><b>🔢 Código:</b> {$record->code}</p>
+                                    <p style='margin: 0; grid-column: span 2;'><b>📄 Factura:</b> {$invoiceHtml}</p>
+                                </div>
+                            </div>
+                            <p style='margin: 0; color: #555;'>Al validar este formulario, se asignará un premio aleatorio del stock Ecommerce y su estado cambiará a <b>Registrado</b> para habilitar su participación.</p>
+                        ");
+                    })
+                    ->visible(fn (FormModel $record) => $record->status === 'pending')
+                    ->action(function (FormModel $record) {
+                        /** @var \App\Interfaces\ParticipantServiceInteface $participantService */
+                        $participantService = app(\App\Interfaces\ParticipantServiceInteface::class);
+
+                        DB::transaction(function () use ($record, $participantService) {
+                            $prizeAllocation = $participantService->assignRandomEcommercePrize($record->id);
+                            $prizeId = $prizeAllocation['prize_id'] ?? null;
+                            $branchId = $prizeAllocation['branch_id'] ?? null;
+
+                            if (! $prizeId) {
+                                Notification::make()
+                                    ->title('Sin stock disponible')
+                                    ->body('No se pudo asignar premio: no hay stock disponible en el canal Ecommerce.')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $record->update([
+                                'status' => 'registered',
+                                'branch_id' => $branchId,
+                                'prize_id' => $prizeId,
+                                'user_id' => auth()->id(),
+                            ]);
+
+                            Notification::make()
+                                ->title('Formulario Validado con Éxito')
+                                ->body('Se validó el formulario y se asignó el premio correctamente.')
+                                ->success()
+                                ->send();
+                        });
+                    }),
                 Tables\Actions\Action::make('entregar_ecommerce')
                     ->label('Entregar (Ecommerce)')
                     ->icon('heroicon-o-check-circle')
@@ -576,7 +660,7 @@ class FormResource extends Resource
                     ->label('Invalidar')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->visible(fn (Model $record) => $record->status === 'registered' && $record->business_unit !== 'ECO')
+                    ->visible(fn (Model $record) => in_array($record->status, ['registered', 'pending']) && $record->business_unit !== 'ECO')
                     ->form(fn (Model $record) => [
                         Placeholder::make('kardex_invalidation')
                             ->label('')
