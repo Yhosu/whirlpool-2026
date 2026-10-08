@@ -299,14 +299,21 @@ class Func
 
     public static function generateRawCode(int $digits, string $type): string
     {
-        if ($type === 'number') {
-            return self::generateNumericCode($digits);
-        }
-        if ($type === 'alphanumeric') {
-            return self::generateAlphanumericCode($digits);
+        if ($digits <= 0) {
+            return '';
         }
 
-        return self::generateNumericCode($digits);
+        if ($digits === 1) {
+            return '1';
+        }
+
+        $remainingDigits = $digits - 1;
+
+        if ($type === 'alphanumeric') {
+            return '1'.self::generateAlphanumericCode($remainingDigits);
+        }
+
+        return '1'.self::generateNumericCode($remainingDigits);
     }
 
     private static function generateNumericCode(int $digits): string

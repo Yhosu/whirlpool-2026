@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ScrambleDocsTest extends TestCase
 {
+    use RefreshDatabase;
     /**
      * Test that only specific API routes are enabled in Scramble documentation.
      */

@@ -28,7 +28,7 @@ class Deploy extends Command
     public function handle()
     {
         if (\App::environment('local')) {
-            $this->callSilent('empty:storage');
+            // $this->callSilent('empty:storage');
             $this->callSilent('down');
             $this->info('0%: Deploy iniciado. Modo Mantenimiento iniciado');
             if (config('jagq.before_migrate')) {

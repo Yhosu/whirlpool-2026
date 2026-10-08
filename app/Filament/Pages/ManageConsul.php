@@ -13,4 +13,9 @@ class ManageConsul extends Page
     protected static ?string $title = 'Gestión General Consul';
 
     protected static string $view = 'filament.pages.manage-consul';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 }

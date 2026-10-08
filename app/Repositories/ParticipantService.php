@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Interfaces\ParticipantServiceInteface;
 use App\Models\Branch;
+use App\Models\PrizeBranch;
 use App\Models\PrizeStockHistory;
 use App\Models\Coupon;
 use App\Models\Form;
@@ -13,6 +14,7 @@ use App\Models\Participant;
 use App\Models\ParticipantCoupon;
 use App\Models\Prize;
 use App\Models\Sale;
+use App\Services\FileUploadService;
 use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -160,7 +162,7 @@ class ParticipantService implements ParticipantServiceInteface
         if ($participationsQuantity > 0) {
             for ($var = 1; $var <= $participationsQuantity; $var++) {
                 // Generamos su formulario
-                $code = \Func::generateCode('App\Models\Form', 'code', 6, 'alphanumeric');
+                $code = \Func::generateCode('App\Models\Form', 'code', 6);
                 $form = Form::create([
                     'participant_id' => $participant->id,
                     'name' => $data['name'],
@@ -177,16 +179,6 @@ class ParticipantService implements ParticipantServiceInteface
                     'prize_id' => null,
                     'user_id' => null,
                     'type' => 'dismac'
-                ]);
-                $prizeAllocation = $this->assignRandomEcommercePrize($form->id);
-                $prizeId = $prizeAllocation['prize_id'] ?? null;
-                if (! $prizeId) {
-                    $form->delete();
-                    continue;
-                }
-                $form->update([
-                    'branch_id' => $prizeAllocation['branch_id'],
-                    'prize_id' => $prizeId,
                 ]);
                 $validCoupons[] = [
                     'participant_id' => $participant->id,
@@ -244,6 +236,299 @@ class ParticipantService implements ParticipantServiceInteface
             'branch_id' => $branch->id,
             'prize_id' => $randomPrize->id,
         ];
+    }
+
+    /**
+     * Selecciona un premio aleatorio con stock disponible según el tipo de formulario
+     * (dismac -> ECOMMERCE, informal-market -> MAYORISTA) y realiza el descuento automático.
+     */
+    public function assignRandomPrizeByForm(Form $form): array
+    {
+        $channel = ($form->type === 'informal-market') ? 'MAYORISTA' : 'ECOMMERCE';
+        $branch = Branch::where('channel', $channel)->first();
+
+        if (! $branch) {
+            return [
+                'success' => false,
+                'message' => 'No hay stock disponible.',
+                'branch_id' => null,
+                'prize_id' => null,
+            ];
+        }
+
+        // Buscamos todos los premios activos que tengan stock > 0 en esta sucursal
+        $availablePrizeBranches = PrizeBranch::with('prize')
+            ->where('branch_id', $branch->id)
+            ->where('stock', '>', 0)
+            ->whereHas('prize', function ($query) {
+                $query->where('active', 1);
+            })
+            ->lockForUpdate()
+            ->get();
+
+        if ($availablePrizeBranches->isEmpty()) {
+            return [
+                'success' => false,
+                'message' => 'No hay stock disponible.',
+                'branch_id' => $branch->id,
+                'prize_id' => null,
+            ];
+        }
+
+        $randomPrizeBranch = $availablePrizeBranches->shuffle()->first();
+        $randomPrize = $randomPrizeBranch?->prize;
+
+        if (! $randomPrize) {
+            return [
+                'success' => false,
+                'message' => 'No hay stock disponible.',
+                'branch_id' => $branch->id,
+                'prize_id' => null,
+            ];
+        }
+
+        // Generamos el movimiento de stock (resta de 1)
+        PrizeStockHistory::create([
+            'prize_id' => $randomPrize->id,
+            'branch_id' => $branch->id,
+            'quantity' => -1,
+            'type' => 'subtraction',
+            'form_id' => $form->id,
+            'description' => "Asignación automática {$branch->channel} al marcar como utilizado",
+        ]);
+
+        return [
+            'success' => true,
+            'branch_id' => $branch->id,
+            'prize_id' => $randomPrize->id,
+            'prize' => $randomPrize,
+        ];
+    }
+
+    /**
+     * Valida y consulta los intentos disponibles asociados a un código (code o control_code).
+     */
+    public function checkCodeAttempts(string $code): array
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return [
+                'success' => false,
+                'status_code' => 400,
+                'message' => 'El código proporcionado no es válido.',
+                'errors' => ['Debe enviar un código válido.'],
+                'data' => (object) [],
+            ];
+        }
+
+        // Buscar coincidencias directas por control_code o code
+        $matchedForms = Form::where(function ($query) use ($code) {
+            $query->where('control_code', $code)
+                  ->orWhere('code', $code);
+        })->get();
+
+        if ($matchedForms->isEmpty()) {
+            return [
+                'success' => false,
+                'status_code' => 404,
+                'message' => 'El código ingresado no existe.',
+                'errors' => ['No se encontró ningún formulario asociado al código proporcionado.'],
+                'data' => (object) [],
+            ];
+        }
+
+        // Si alguna coincidencia posee control_code (compra Dismac con múltiples productos),
+        // agrupamos por ese control_code para obtener todos los intentos de dicha compra.
+        $controlCode = $matchedForms->first(fn ($f) => ! empty($f->control_code))?->control_code;
+
+        if (! empty($controlCode)) {
+            $allForms = Form::with(['prize', 'branch', 'sale'])
+                ->where('control_code', $controlCode)
+                ->orderBy('created_at', 'asc')
+                ->get();
+        } else {
+            $allForms = Form::with(['prize', 'branch', 'sale'])
+                ->where('code', $code)
+                ->orderBy('created_at', 'asc')
+                ->get();
+        }
+
+        // Filtrar formularios según estado
+        $registeredForms = $allForms->where('status', 'registered')->values();
+        $usedForms = $allForms->where('status', 'used')->values();
+        $lastForm = $registeredForms->first();
+
+        if (! $lastForm) {
+            return [
+                'success' => false,
+                'status_code' => 400,
+                'message' => 'El código ya no cuenta con intentos disponibles o está en estado de validación.',
+                'errors' => ['Todos los intentos han sido utilizados o no se encuentran activos.'],
+                'data' => [
+                    'last_form' => null,
+                    'registered_count' => 0,
+                    'registered_forms' => [],
+                    'used_count' => $usedForms->count(),
+                    'used_forms' => $usedForms,
+                ],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'status_code' => 200,
+            'message' => 'El código se validó con éxito.',
+            'data' => [
+                'last_form' => $lastForm,
+                'registered_count' => $registeredForms->count(),
+                'registered_forms' => $registeredForms,
+                'used_count' => $usedForms->count(),
+                'used_forms' => $usedForms,
+            ],
+        ];
+    }
+
+    /**
+     * Marca un formulario como utilizado, asignando el premio aleatorio correspondiente y descontando stock.
+     */
+    public function markFormAsUsed(string $formId, ?string $controlCode = null): array
+    {
+        $form = Form::where('id', $formId)->first();
+
+        if (! $form) {
+            return [
+                'success' => false,
+                'status_code' => 404,
+                'message' => 'Formulario no encontrado.',
+                'errors' => ['No se encontró ningún registro con el identificador UUID proporcionado.'],
+                'data' => (object) [],
+            ];
+        }
+
+        if ($form->status === 'used') {
+            return [
+                'success' => false,
+                'status_code' => 400,
+                'message' => 'El formulario ya ha sido utilizado.',
+                'errors' => ['Este intento ya fue utilizado previamente.'],
+                'data' => [
+                    'id' => $form->id,
+                    'status' => $form->status,
+                ],
+            ];
+        }
+
+        if ($form->status !== 'registered') {
+            return [
+                'success' => false,
+                'status_code' => 400,
+                'message' => 'Estado de formulario no válido.',
+                'errors' => ["No se puede marcar como utilizado un formulario con estado '{$form->status}'."],
+                'data' => [
+                    'id' => $form->id,
+                    'status' => $form->status,
+                ],
+            ];
+        }
+
+        if (! empty($controlCode) && ! empty($form->control_code) && $form->control_code !== $controlCode) {
+            return [
+                'success' => false,
+                'status_code' => 400,
+                'message' => 'El código de control no coincide.',
+                'errors' => ['El código de control enviado no coincide con el formulario.'],
+                'data' => (object) [],
+            ];
+        }
+
+        DB::beginTransaction();
+        try {
+            $prizeAllocation = $this->assignRandomPrizeByForm($form);
+
+            if (! ($prizeAllocation['success'] ?? false)) {
+                DB::rollBack();
+
+                return [
+                    'success' => false,
+                    'status_code' => 400,
+                    'message' => $prizeAllocation['message'] ?? 'No hay stock disponible.',
+                    'errors' => [$prizeAllocation['message'] ?? 'No hay stock disponible.'],
+                    'data' => (object) [],
+                ];
+            }
+
+            $form->update([
+                'branch_id' => $prizeAllocation['branch_id'],
+                'prize_id' => $prizeAllocation['prize_id'],
+                'status' => 'used',
+                'is_scratched' => 1,
+            ]);
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'status_code' => 200,
+                'message' => 'Formulario marcado como utilizado con éxito.',
+                'data' => $form->fresh(['prize', 'branch', 'sale']),
+            ];
+        } catch (\Exception $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Registra un participante y formulario para el canal de Mercado Informal.
+     */
+    public function registerInformalMarketForm(array $data): Form
+    {
+        $name = trim((string) $data['name']);
+        $cellphone = trim((string) $data['cellphone']);
+        $ciNumber = trim((string) ($data['ci_number'] ?? $data['document_number'] ?? ''));
+        $city = trim((string) $data['city']);
+        $base64File = (string) $data['file'];
+
+        // Subir archivo optimizado
+        $uploadResult = FileUploadService::uploadOptimizedBase64($base64File, 'invoices/informal');
+
+        // Generar código único de 6 caracteres alfanumérico
+        $code = \Func::generateCode('App\Models\Form', 'code', 6);
+
+        // Buscar o crear participante
+        $participant = Participant::where('ci_number', $ciNumber)->first();
+        if (! $participant) {
+            $participant = Participant::create([
+                'name' => $name,
+                'ci_number' => $ciNumber,
+                'cellphone' => $cellphone,
+                'city' => $city,
+                'document_type' => 'CI',
+                'status' => 'registered',
+                'date' => date('Y-m-d'),
+                'time' => date('H:i:s'),
+            ]);
+        }
+
+        // Crear formulario en estado pending
+        return Form::create([
+            'name' => $name,
+            'ci_number' => $ciNumber,
+            'cellphone' => $cellphone,
+            'city' => $city,
+            'code' => $code,
+            'status' => 'pending',
+            'type' => 'informal-market',
+            'business_unit' => 'MERCADO INFORMAL',
+            'invoice_image' => $uploadResult['path'],
+            'invoice_url' => $uploadResult['url'],
+            'participant_id' => $participant->id,
+            'branch_id' => null,
+            'prize_id' => null,
+            'user_id' => null,
+        ]);
     }
 
     public function findByCiNumber($ciNumber)

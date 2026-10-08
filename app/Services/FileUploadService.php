@@ -93,19 +93,33 @@ class FileUploadService
         $diskName = (! empty($s3Bucket) && ! empty($s3Key)) ? 's3' : 'public';
 
         try {
-            $options = ['visibility' => 'public'];
+            $options = [];
             if (! empty($contentType)) {
                 $options['ContentType'] = $contentType;
             }
 
-            Storage::disk($diskName)->put($filePath, $fileContent, $options);
-            $url = Storage::disk($diskName)->url($filePath);
+            // Los buckets modernos de S3 tienen 'Bucket Owner Enforced' y no permiten ACLs.
+            // La visibilidad pública explícita solo se aplica en disco local 'public'.
+            if ($diskName === 'public') {
+                $options['visibility'] = 'public';
+            }
+
+            $saved = Storage::disk($diskName)->put($filePath, $fileContent, $options);
+            if (! $saved) {
+                throw new Exception("El disco {$diskName} no pudo almacenar el archivo (put retornó false).");
+            }
+
+            if ($diskName === 's3') {
+                $url = Storage::disk('s3')->url($filePath);
+            } else {
+                $url = asset('storage/'.$filePath);
+            }
         } catch (Exception $e) {
             // Si S3 falla (por ejemplo credenciales no asignadas aún o error de red),
             // guardamos en el disco local 'public' para no perder el formulario del usuario
             Log::warning("No se pudo subir a S3 ({$e->getMessage()}), guardando en disco local 'public'.");
             $diskName = 'public';
-            Storage::disk('public')->put($filePath, $fileContent);
+            Storage::disk('public')->put($filePath, $fileContent, ['visibility' => 'public']);
             $url = asset('storage/'.$filePath);
         }
 

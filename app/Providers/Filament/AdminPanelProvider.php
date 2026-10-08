@@ -29,7 +29,7 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::hex('#E22319'), // Replace with your hex code
             ])
             ->sidebarCollapsibleOnDesktop()
-            ->brandName('Dismac - Tu pase al mundial')
+            ->brandName('Whirlpool Special Days - Dismac')
             ->brandLogoHeight('3rem')
             ->favicon('assets/img/logo.png')
             ->brandLogo(fn (): string => (string) asset('assets/img/logo.png'))

@@ -10,7 +10,7 @@ Route::get('/home', function () {
 });
 Route::get('/participate/{ciNumber}', [MainController::class, 'findParticipate']);
 
-Route::get('/', [MainController::class, 'showLandingKernev']);
+Route::redirect('/', '/admin');
 Route::get('/el-mundial-se-vive-en-casa', [MainController::class, 'showElMundialSeViveEnCasa']);
 Route::get('/form-kernig', [MainController::class, 'showFormKernev']);
 Route::get('/coupons', [MainController::class, 'showFormKernevTickets']);

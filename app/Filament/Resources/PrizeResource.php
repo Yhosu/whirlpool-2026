@@ -17,7 +17,7 @@ class PrizeResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-gift';
 
-    protected static ?string $navigationGroup = 'CONSUL';
+    protected static ?string $navigationGroup = 'Whirlpool';
 
     protected static ?string $navigationLabel = 'Premios';
 

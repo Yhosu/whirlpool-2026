@@ -59,6 +59,11 @@ final class Sale extends Model
         return $this->hasMany(ParticipantCoupon::class, 'sale_id', 'id');
     }
 
+    public function forms(): HasMany
+    {
+        return $this->hasMany(Form::class, 'sale_id', 'id');
+    }
+
     public function mundial_coupons(): HasMany
     {
         return $this->hasMany(MundialCoupon::class, 'sale_id', 'id');

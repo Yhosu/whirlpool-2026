@@ -3,10 +3,16 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\PrizeStockHistoryResource\Pages;
+use App\Models\Branch;
+use App\Models\Prize;
 use App\Models\PrizeStockHistory;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Actions\Action;
@@ -24,7 +30,7 @@ class PrizeStockHistoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clock';
 
-    protected static ?string $navigationGroup = 'CONSUL';
+    protected static ?string $navigationGroup = 'Whirlpool';
 
     protected static ?string $navigationLabel = 'Historial de Stock';
 
@@ -32,9 +38,11 @@ class PrizeStockHistoryResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Historiales de Stock';
 
+    protected static ?int $navigationSort = 4;
+
     public static function canAccess(): bool
     {
-        return auth()->user()->isAdmin() || auth()->user()->email === 'coranivico@gmail.com';
+        return auth()->user()->isAdmin() || auth()->user()->isSubadmin() || auth()->user()->email === 'coranivico@gmail.com';
     }
 
     public static function canCreate(): bool
@@ -197,6 +205,59 @@ class PrizeStockHistoryResource extends Resource
                 Tables\Actions\ViewAction::make()->slideOver(),
             ])
             ->headerActions([
+                Action::make('add_stock')
+                    ->label('Ajustar / Agregar Stock')
+                    ->icon('heroicon-o-plus-circle')
+                    ->color('primary')
+                    ->slideOver()
+                    ->form([
+                        Select::make('prize_id')
+                            ->label('Premio')
+                            ->options(Prize::orderBy('amount', 'asc')->pluck('name', 'id'))
+                            ->required()
+                            ->searchable()
+                            ->preload(),
+                        Select::make('branch_id')
+                            ->label('Sucursal')
+                            ->options(Branch::all()->mapWithKeys(fn ($b) => [$b->id => "{$b->name} ({$b->channel}) - {$b->city}"]))
+                            ->required()
+                            ->searchable()
+                            ->preload(),
+                        Select::make('type')
+                            ->label('Tipo de Movimiento')
+                            ->options([
+                                'addition' => 'Adición (Aumentar Stock)',
+                                'subtraction' => 'Sustracción (Disminuir Stock)',
+                            ])
+                            ->default('addition')
+                            ->required(),
+                        TextInput::make('quantity')
+                            ->label('Cantidad')
+                            ->numeric()
+                            ->minValue(1)
+                            ->default(1)
+                            ->required(),
+                        Textarea::make('description')
+                            ->label('Motivo / Observación')
+                            ->placeholder('Ej: Ingreso de nuevo lote promocional')
+                            ->required(),
+                    ])
+                    ->action(function (array $data) {
+                        PrizeStockHistory::create([
+                            'prize_id' => $data['prize_id'],
+                            'branch_id' => $data['branch_id'],
+                            'quantity' => (int) $data['quantity'],
+                            'type' => $data['type'],
+                            'user_id' => auth()->id(),
+                            'description' => $data['description'],
+                        ]);
+
+                        Notification::make()
+                            ->title('Movimiento de Stock Registrado')
+                            ->body('El inventario ha sido actualizado correctamente.')
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('export')
                     ->label('Exportar Excel')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -218,6 +279,8 @@ class PrizeStockHistoryResource extends Resource
                     }),
             ])
             ->bulkActions([])
+            ->defaultPaginationPageOption(25)
+            ->paginationPageOptions([10, 25, 50, 100])
             ->defaultSort('created_at', 'desc');
     }
 

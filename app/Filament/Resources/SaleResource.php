@@ -13,6 +13,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Rap2hpoutre\FastExcel\FastExcel;
 
 class SaleResource extends Resource
 {
@@ -20,7 +22,7 @@ class SaleResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';
 
-    protected static ?string $navigationGroup = 'Hisense';
+    protected static ?string $navigationGroup = 'Whirlpool';
 
     protected static ?string $navigationLabel = 'Ventas';
 
@@ -28,14 +30,11 @@ class SaleResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Ventas';
 
-    public static function shouldRegisterNavigation(): bool
-    {
-        return false;
-    }
+    protected static ?int $navigationSort = 2;
 
     public static function canViewAny(): bool
     {
-        return auth()->user()->isAdmin();
+        return auth()->user()->isAdmin() || auth()->user()->isSubadmin();
     }
 
     public static function form(Form $form): Form
@@ -98,14 +97,11 @@ class SaleResource extends Resource
                             ->disabled()
                             ->formatStateUsing(function ($state, Get $get) {
                                 $code = (string) $get('code_brand');
-                                if ($code === '10') {
-                                    return 'TOSHIBA';
-                                }
-                                if ($code === '404') {
-                                    return 'HISENSE';
+                                if ($code === '2' || $code === '15') {
+                                    return 'WHIRLPOOL';
                                 }
 
-                                return $state;
+                                return $state ?: 'WHIRLPOOL';
                             }),
                         Forms\Components\TextInput::make('code_brand')
                             ->label('Cod. Marca')
@@ -133,27 +129,43 @@ class SaleResource extends Resource
             ->paginated([10, 25, 50, 100])
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nombre / Participante')
-                    ->prefix('Participante: ')
-                    ->searchable(),
+                    ->label('Cliente / Participante')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('medium'),
+                Tables\Columns\TextColumn::make('control_code')
+                    ->label('Código Control')
+                    ->searchable()
+                    ->copyable()
+                    ->fontFamily('mono'),
                 Tables\Columns\TextColumn::make('quantity_items')
                     ->label('Items')
-                    ->prefix('Items: ')
                     ->numeric()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('total_amount')
+                    ->label('Total (Bs.)')
+                    ->numeric(decimalPlaces: 2)
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('forms_count')
+                    ->label('Intentos')
+                    ->counts('forms')
+                    ->badge()
+                    ->color('primary')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('sale_type')
                     ->label('Tipo Venta')
-                    ->prefix('Tipo Venta: ')
+                    ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('total_amount')
-                    ->label('Total')
-                    ->prefix('Total: ')
-                    ->numeric()
+                Tables\Columns\TextColumn::make('business_unit')
+                    ->label('Canal')
+                    ->badge(),
+                Tables\Columns\IconColumn::make('active')
+                    ->label('Válido')
+                    ->boolean(),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha Registro')
+                    ->dateTime('d/m/Y H:i')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('coupons_count')
-                    ->label('Cupones')
-                    ->prefix('Cupones: ')
-                    ->getStateUsing(fn ($record) => $record->coupons()->count()),
                 Tables\Columns\Layout\Panel::make([
                     Tables\Columns\Layout\Split::make([
                         Tables\Columns\TextColumn::make('invoice_number')
@@ -168,23 +180,12 @@ class SaleResource extends Resource
                             ->label('Fecha Venta')
                             ->prefix('Fecha Venta: ')
                             ->searchable(),
-                        Tables\Columns\TextColumn::make('control_code')
-                            ->label('Ctrl Código')
-                            ->prefix('Ctrl Código: ')
-                            ->searchable(),
-                        Tables\Columns\TextColumn::make('business_unit')
-                            ->label('UDN')
-                            ->prefix('UDN: '),
-                        Tables\Columns\TextColumn::make('active')
-                            ->label('Válido')
-                            ->formatStateUsing(fn ($state) => $state ? 'Válido: Sí' : 'Válido: No')
-                            ->badge()
-                            ->color(fn ($state) => $state ? 'success' : 'danger'),
-                        Tables\Columns\TextColumn::make('created_at')
-                            ->label('Registrado')
-                            ->prefix('Registrado: ')
-                            ->dateTime()
-                            ->sortable(),
+                        Tables\Columns\TextColumn::make('invoice_url')
+                            ->label('Factura SIAT')
+                            ->formatStateUsing(fn ($state) => $state ? '📄 Ver Factura SIAT (URL)' : 'Sin Factura URL')
+                            ->color(fn ($state) => $state ? 'info' : 'gray')
+                            ->url(fn (Model $record) => $record->invoice_url)
+                            ->openUrlInNewTab(),
                     ]),
                 ])->collapsible(),
             ])
@@ -201,6 +202,7 @@ class SaleResource extends Resource
                         'ECO' => 'ECO',
                         'RET' => 'RET',
                         'ACE' => 'ACE',
+                        'WEB' => 'WEB',
                     ]),
                 Tables\Filters\SelectFilter::make('sale_type')
                     ->label('Tipo de Venta')
@@ -218,27 +220,79 @@ class SaleResource extends Resource
                         false: fn (Builder $query) => $query->whereDoesntHave('valid_sale_items'),
                         blank: fn (Builder $query) => $query,
                     ),
-                Tables\Filters\TernaryFilter::make('consul_promotion')
-                    ->label('Tiene Productos Consul')
-                    ->queries(
-                        true: fn (Builder $query) => $query->whereHas('consul_valid_sale_items'),
-                        false: fn (Builder $query) => $query->whereDoesntHave('consul_valid_sale_items'),
-                        blank: fn (Builder $query) => $query,
-                    ),
+                Tables\Filters\Filter::make('created_at')
+                    ->form([
+                        Forms\Components\DatePicker::make('created_from')
+                            ->label('Desde'),
+                        Forms\Components\DatePicker::make('created_until')
+                            ->label('Hasta'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['created_from'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
+                            )
+                            ->when(
+                                $data['created_until'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['created_from'] ?? null) {
+                            $indicators[] = Tables\Filters\Indicator::make('Desde '.Carbon::parse($data['created_from'])->format('d/m/Y'))
+                                ->removeField('created_from');
+                        }
+                        if ($data['created_until'] ?? null) {
+                            $indicators[] = Tables\Filters\Indicator::make('Hasta '.Carbon::parse($data['created_until'])->format('d/m/Y'))
+                                ->removeField('created_until');
+                        }
+
+                        return $indicators;
+                    }),
             ])
             ->filtersLayout(Tables\Enums\FiltersLayout::Modal)
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->label('Editar')
-                    ->slideOver(),
                 Tables\Actions\ViewAction::make()
                     ->label('Ver')
                     ->slideOver(),
+                Tables\Actions\EditAction::make()
+                    ->label('Editar')
+                    ->slideOver(),
+            ])
+            ->headerActions([
+                Tables\Actions\Action::make('export')
+                    ->label('Exportar Excel')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('success')
+                    ->action(function ($livewire) {
+                        $query = $livewire->getFilteredTableQuery();
+                        $data = $query->with(['participant', 'forms', 'sale_items'])->get()->map(fn ($item) => [
+                            'Fecha Registro' => $item->created_at?->format('d/m/Y H:i') ?? '',
+                            'Fecha Venta' => $item->sale_date ?? '',
+                            'Cliente' => $item->name,
+                            'Código Control' => $item->control_code,
+                            'Factura N°' => $item->invoice_number,
+                            'Agencia / Ciudad' => $item->city_agency,
+                            'Canal UDN' => $item->business_unit,
+                            'Tipo Venta' => $item->sale_type,
+                            'Cantidad Items' => $item->quantity_items,
+                            'Total Monto (Bs)' => $item->total_amount,
+                            'Intentos Generados' => $item->forms->count(),
+                            'Válido' => $item->active ? 'Sí' : 'No',
+                            'Factura URL SIAT' => $item->invoice_url,
+                        ]);
+
+                        return (new FastExcel($data))->download('ventas_'.now()->format('Ymd_His').'.xlsx');
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                 ]),
-            ]);
+            ])
+            ->defaultPaginationPageOption(25)
+            ->paginationPageOptions([10, 25, 50, 100]);
     }
 
     public static function getRelations(): array

@@ -7,6 +7,7 @@ use App\Models\Participant;
 use App\Models\Sale;
 use App\Repositories\ParticipantService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class ParticipantServiceTest extends TestCase
@@ -18,6 +19,7 @@ class ParticipantServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        \Illuminate\Support\Facades\Cache::flush();
         $this->service = $this->app->make(ParticipantService::class);
     }
 
@@ -204,6 +206,9 @@ class ParticipantServiceTest extends TestCase
         ]);
         $couponLegacyNoSale->id = (string) \Str::uuid();
         $couponLegacyNoSale->save();
+
+        Cache::store('file')->forget('json_participants');
+        Cache::forget('json_participants');
 
         // Call the service method
         $response = $this->service->getJsonParticipants();

@@ -138,6 +138,10 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 * **Método:** `POST`
 * **Endpoint:** `/api/mark-as-used`
 * **Descripción:** Se debe invocar una vez concluido el giro en la ruleta/lavadora para pasar el estado del formulario de `registered` a `used`, evitando que se vuelva a jugar el mismo intento.
+En este endpoint se realiza la asignación aleatoria del premio y el descuento automático de stock según el tipo de formulario:
+* Si el tipo es `dismac`, se descuenta el stock de la sucursal del canal **`ECOMMERCE`**.
+* Si el tipo es `informal-market`, se descuenta el stock de la sucursal del canal **`MAYORISTA`**.
+Se actualiza el `branch_id` y `prize_id` correspondientes en el formulario. Si no hay stock disponible, la petición retorna error 400.
 
 ### Payload de Envío (Request Body JSON):
 ```json
@@ -163,9 +167,17 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
     "code": "A1B2C3",
     "status": "used",
     "is_scratched": 1,
+    "prize_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    "branch_id": "8a0deb3c-2a6c-4cad-8acc-1a9c6a2cba5c",
     "prize": {
-      "id": 5,
-      "name": "Microondas Whirlpool 20L"
+      "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "name": "Premio 500 Bs",
+      "amount": "500.00"
+    },
+    "branch": {
+      "id": "8a0deb3c-2a6c-4cad-8acc-1a9c6a2cba5c",
+      "name": "Central Dismac",
+      "channel": "ECOMMERCE"
     }
   },
   "errors": []
@@ -175,6 +187,18 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 ---
 
 ### Errores posibles:
+
+#### No hay stock disponible en el canal correspondiente (`400 Bad Request`):
+```json
+{
+  "process": false,
+  "message": "No hay stock disponible.",
+  "errors": [
+    "No hay stock disponible."
+  ],
+  "data": {}
+}
+```
 
 #### El UUID no existe (`404 Not Found`):
 ```json

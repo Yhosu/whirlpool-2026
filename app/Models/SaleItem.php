@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 final class SaleItem extends Model
 {
@@ -19,6 +20,16 @@ final class SaleItem extends Model
     protected $casts = ['id' => 'string'];
 
     protected $with = [];
+
+    public static function boot()
+    {
+        parent::boot();
+        self::creating(function ($model) {
+            if (empty($model->id)) {
+                $model->id = (string) Str::uuid();
+            }
+        });
+    }
 
     protected $fillable = [
         'sale_id',

@@ -133,8 +133,29 @@ class NewApiEndpointsTest extends TestCase
         $this->assertEquals(1, $response->json('data.used_count'));
     }
 
-    public function test_mark_as_used_updates_status_from_registered_to_used(): void
+    public function test_mark_as_used_assigns_ecommerce_prize_and_discounts_stock_for_dismac(): void
     {
+        $branchEco = Branch::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Central Dismac',
+            'channel' => 'ECOMMERCE',
+            'city' => 'Santa Cruz',
+        ]);
+
+        $prize = Prize::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Premio 500 Bs',
+            'amount' => 500,
+            'active' => true,
+        ]);
+
+        $prizeBranch = PrizeBranch::create([
+            'id' => (string) Str::uuid(),
+            'prize_id' => $prize->id,
+            'branch_id' => $branchEco->id,
+            'stock' => 5,
+        ]);
+
         $form = Form::create([
             'id' => (string) Str::uuid(),
             'name' => 'Pedro Sanchez',
@@ -144,6 +165,7 @@ class NewApiEndpointsTest extends TestCase
             'code' => 'COUPON77',
             'control_code' => 'CTRL-555',
             'status' => 'registered',
+            'type' => 'dismac',
             'is_scratched' => 0,
         ]);
 
@@ -161,6 +183,134 @@ class NewApiEndpointsTest extends TestCase
         $form->refresh();
         $this->assertEquals('used', $form->status);
         $this->assertEquals(1, $form->is_scratched);
+        $this->assertEquals($branchEco->id, $form->branch_id);
+        $this->assertEquals($prize->id, $form->prize_id);
+
+        $prizeBranch->refresh();
+        $this->assertEquals(4, $prizeBranch->stock);
+
+        $this->assertDatabaseHas('prize_stock_history', [
+            'form_id' => $form->id,
+            'prize_id' => $prize->id,
+            'branch_id' => $branchEco->id,
+            'quantity' => -1,
+            'type' => 'subtraction',
+        ]);
+    }
+
+    public function test_mark_as_used_assigns_mayorista_prize_and_discounts_stock_for_informal_market(): void
+    {
+        $branchMay = Branch::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'CashBack Mayoristas',
+            'channel' => 'MAYORISTA',
+            'city' => 'Santa Cruz',
+        ]);
+
+        $prize = Prize::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Premio 250 Bs',
+            'amount' => 250,
+            'active' => true,
+        ]);
+
+        $prizeBranch = PrizeBranch::create([
+            'id' => (string) Str::uuid(),
+            'prize_id' => $prize->id,
+            'branch_id' => $branchMay->id,
+            'stock' => 3,
+        ]);
+
+        $form = Form::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Maria Fernandez',
+            'ci_number' => '9876543',
+            'cellphone' => '72233445',
+            'city' => 'Santa Cruz',
+            'code' => 'COUPON88',
+            'status' => 'registered',
+            'type' => 'informal-market',
+            'is_scratched' => 0,
+        ]);
+
+        $response = $this->postJson('/api/mark-as-used', [
+            'id' => $form->id,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'process' => true,
+            'message' => 'Formulario marcado como utilizado con éxito.',
+        ]);
+
+        $form->refresh();
+        $this->assertEquals('used', $form->status);
+        $this->assertEquals(1, $form->is_scratched);
+        $this->assertEquals($branchMay->id, $form->branch_id);
+        $this->assertEquals($prize->id, $form->prize_id);
+
+        $prizeBranch->refresh();
+        $this->assertEquals(2, $prizeBranch->stock);
+
+        $this->assertDatabaseHas('prize_stock_history', [
+            'form_id' => $form->id,
+            'prize_id' => $prize->id,
+            'branch_id' => $branchMay->id,
+            'quantity' => -1,
+            'type' => 'subtraction',
+        ]);
+    }
+
+    public function test_mark_as_used_fails_when_no_stock_available(): void
+    {
+        $branchEco = Branch::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Central Dismac',
+            'channel' => 'ECOMMERCE',
+            'city' => 'Santa Cruz',
+        ]);
+
+        $prize = Prize::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Premio 100 Bs',
+            'amount' => 100,
+            'active' => true,
+        ]);
+
+        // Stock en 0
+        PrizeBranch::create([
+            'id' => (string) Str::uuid(),
+            'prize_id' => $prize->id,
+            'branch_id' => $branchEco->id,
+            'stock' => 0,
+        ]);
+
+        $form = Form::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Juan Sin Stock',
+            'ci_number' => '1122334',
+            'cellphone' => '73344556',
+            'city' => 'La Paz',
+            'code' => 'NOSTOCK1',
+            'status' => 'registered',
+            'type' => 'dismac',
+            'is_scratched' => 0,
+        ]);
+
+        $response = $this->postJson('/api/mark-as-used', [
+            'id' => $form->id,
+        ]);
+
+        $response->assertStatus(400);
+        $response->assertJson([
+            'process' => false,
+            'message' => 'No hay stock disponible.',
+        ]);
+
+        $form->refresh();
+        $this->assertEquals('registered', $form->status);
+        $this->assertNull($form->prize_id);
+        $this->assertNull($form->branch_id);
     }
 
     public function test_mark_as_used_fails_if_already_used_or_not_found(): void
@@ -290,4 +440,50 @@ class NewApiEndpointsTest extends TestCase
         $this->assertArrayNotHasKey('/mark-as-used', $paths);
         $this->assertArrayNotHasKey('/informal-market-form', $paths);
     }
+
+    public function test_register_participant_creates_forms_without_assigning_prize(): void
+    {
+        config(['services.dismac.secret_key' => 'secret-test-key']);
+
+        $payload = [
+            'ci_number' => '8765432',
+            'document_type' => 'CI',
+            'name' => 'Roberto Carlos',
+            'email' => 'roberto@example.com',
+            'cellphone' => '71234567',
+            'city' => 'Santa Cruz',
+            'city_agency' => 'Santa Cruz Central',
+            'sale_date' => '2026-10-08',
+            'control_code' => 'CTRL-SALE-123',
+            'business_unit' => 'ECO',
+            'sale_type' => 'CONTADO',
+            'total_amount' => 5000,
+            'sale_items' => [
+                [
+                    'code_brand' => 2,
+                    'sku' => 'WHIRL-001',
+                    'name' => 'Lavadora Whirlpool 16kg',
+                    'quantity' => 1,
+                    'amount' => 5000,
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/register-participant', $payload, [
+            'X-API-KEY' => 'secret-test-key',
+        ]);
+
+        $response->assertStatus(200);
+
+        $form = Form::where('ci_number', '8765432')->first();
+        $this->assertNotNull($form);
+        $this->assertEquals('registered', $form->status);
+        $this->assertEquals('dismac', $form->type);
+        $this->assertNull($form->prize_id, 'El formulario no debe tener premio asignado al crearse la venta');
+        $this->assertNull($form->branch_id, 'El formulario no debe tener sucursal asignada al crearse la venta');
+        $this->assertDatabaseMissing('prize_stock_history', [
+            'form_id' => $form->id,
+        ]);
+    }
 }
+

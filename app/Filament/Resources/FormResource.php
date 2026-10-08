@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use Rap2hpoutre\FastExcel\FastExcel;
 
 class FormResource extends Resource
 {
@@ -34,13 +35,15 @@ class FormResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?string $navigationGroup = 'CONSUL';
+    protected static ?string $navigationGroup = 'Whirlpool';
 
     protected static ?string $navigationLabel = 'Formularios';
 
     protected static ?string $modelLabel = 'Formulario';
 
     protected static ?string $pluralModelLabel = 'Formularios';
+
+    protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
     {
@@ -82,11 +85,21 @@ class FormResource extends Resource
                     ->label('Estado')
                     ->options([
                         'registered' => 'Registrado',
+                        'pending' => 'Pendiente',
+                        'used' => 'Utilizado',
                         'invalidated' => 'Invalidado',
                         'delivered' => 'Entregado',
                     ])
                     ->default('registered')
                     ->required()
+                    ->disabled(fn () => ! static::isSpecialUser())
+                    ->hidden(fn () => ! static::isSpecialUser()),
+                Select::make('type')
+                    ->label('Tipo de Registro')
+                    ->options([
+                        'dismac' => 'Dismac',
+                        'informal-market' => 'Mercado Informal',
+                    ])
                     ->disabled(fn () => ! static::isSpecialUser())
                     ->hidden(fn () => ! static::isSpecialUser()),
                 Select::make('branch_id')
@@ -133,11 +146,22 @@ class FormResource extends Resource
                     ->label('Cliente')
                     ->searchable()
                     ->sortable()
-                    ->formatStateUsing(fn ($state) => "Nombre: {$state}"),
+                    ->weight('medium'),
                 Tables\Columns\TextColumn::make('ci_number')
                     ->label('CI')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('code')
+                    ->label('Código')
                     ->searchable()
-                    ->formatStateUsing(fn ($state) => "Carnet: {$state}"),
+                    ->sortable()
+                    ->copyable()
+                    ->fontFamily('mono')
+                    ->weight('bold'),
+                Tables\Columns\TextColumn::make('prize.name')
+                    ->label('Premio')
+                    ->placeholder('Sin girar')
+                    ->badge()
+                    ->color(fn ($state) => $state ? 'success' : 'gray'),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
@@ -174,9 +198,8 @@ class FormResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Fecha')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable(),
 
                 Panel::make([
                     Stack::make([
@@ -203,17 +226,11 @@ class FormResource extends Resource
                             ->sortable()
                             ->placeholder('Sucursal: No asignada')
                             ->formatStateUsing(fn ($state, FormModel $record) => "Sucursal: {$state}".($record->branch ? " ({$record->branch->city})" : '')),
-                        Tables\Columns\TextColumn::make('invoice_image')
-                            ->label('Factura / Boleta (Local)')
-                            ->formatStateUsing(fn ($state) => $state ? '📄 Ver / Descargar Factura (Local)' : 'Sin Factura Local')
-                            ->color(fn ($state) => $state ? 'primary' : 'gray')
-                            ->url(fn (Model $record) => $record->invoice_image ? asset('storage/'.$record->invoice_image) : null)
-                            ->openUrlInNewTab(),
                         Tables\Columns\TextColumn::make('invoice_url')
-                            ->label('Factura / Boleta (Web)')
-                            ->formatStateUsing(fn ($state) => $state ? '📄 Ver / Descargar Factura (URL)' : 'Sin URL Adjunta')
-                            ->color(fn ($state) => $state ? 'info' : 'gray')
-                            ->url(fn ($state) => $state)
+                            ->label('Factura / Boleta')
+                            ->formatStateUsing(fn ($state, FormModel $record) => $record->invoice_view_url ? '📄 Ver / Descargar Factura' : 'Sin Factura Adjunta')
+                            ->color(fn ($state, FormModel $record) => $record->invoice_view_url ? 'primary' : 'gray')
+                            ->url(fn (FormModel $record) => $record->invoice_view_url)
                             ->openUrlInNewTab(),
                         Tables\Columns\TextColumn::make('voucher')
                             ->label('Comprobante de Entrega')
@@ -321,15 +338,16 @@ class FormResource extends Resource
                     }),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
                 Tables\Actions\Action::make('validar')
                     ->label('Validar')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
+                    ->button()
+                    ->slideOver()
                     ->requiresConfirmation()
                     ->modalHeading(fn (FormModel $record) => 'Validar Formulario: '.$record->name)
                     ->modalDescription(function (FormModel $record) {
-                        $invoiceLink = $record->invoice_url ?: ($record->invoice_image ? (str_starts_with($record->invoice_image, 'http') ? $record->invoice_image : asset('storage/'.$record->invoice_image)) : '#');
+                        $invoiceLink = $record->invoice_view_url ?: '#';
                         $invoiceHtml = $invoiceLink !== '#' ? "<a href='{$invoiceLink}' target='_blank' style='color: #00aa38; text-decoration: underline; font-weight: bold;'>🔍 Ver Factura / Comprobante Adjunto</a>" : "<span style='color: #666;'>Sin adjunto</span>";
 
                         return new HtmlString("
@@ -343,172 +361,101 @@ class FormResource extends Resource
                                     <p style='margin: 0; grid-column: span 2;'><b>📄 Factura:</b> {$invoiceHtml}</p>
                                 </div>
                             </div>
-                            <p style='margin: 0; color: #555;'>Al validar este formulario, se asignará un premio aleatorio del stock Ecommerce y su estado cambiará a <b>Registrado</b> para habilitar su participación.</p>
+                            <p style='margin: 0; color: #555;'>Al validar este formulario, su estado cambiará a <b>Registrado</b> para habilitar su participación en la ruleta/lavadora.</p>
                         ");
                     })
                     ->visible(fn (FormModel $record) => $record->status === 'pending')
                     ->action(function (FormModel $record) {
-                        /** @var \App\Interfaces\ParticipantServiceInteface $participantService */
-                        $participantService = app(\App\Interfaces\ParticipantServiceInteface::class);
+                        $record->update([
+                            'status' => 'registered',
+                            'user_id' => auth()->id(),
+                        ]);
 
-                        DB::transaction(function () use ($record, $participantService) {
-                            $prizeAllocation = $participantService->assignRandomEcommercePrize($record->id);
-                            $prizeId = $prizeAllocation['prize_id'] ?? null;
-                            $branchId = $prizeAllocation['branch_id'] ?? null;
-
-                            if (! $prizeId) {
-                                Notification::make()
-                                    ->title('Sin stock disponible')
-                                    ->body('No se pudo asignar premio: no hay stock disponible en el canal Ecommerce.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-
-                            $record->update([
-                                'status' => 'registered',
-                                'branch_id' => $branchId,
-                                'prize_id' => $prizeId,
-                                'user_id' => auth()->id(),
-                            ]);
-
-                            Notification::make()
-                                ->title('Formulario Validado con Éxito')
-                                ->body('Se validó el formulario y se asignó el premio correctamente.')
-                                ->success()
-                                ->send();
-                        });
+                        Notification::make()
+                            ->title('Formulario Validado con Éxito')
+                            ->body('Se validó el formulario correctamente y quedó listo para participar.')
+                            ->success()
+                            ->send();
                     }),
-                Tables\Actions\Action::make('entregar_ecommerce')
-                    ->label('Entregar (Ecommerce)')
+                Tables\Actions\ViewAction::make()
+                    ->slideOver(),
+                Tables\Actions\EditAction::make()
+                    ->slideOver(),
+                Tables\Actions\Action::make('entregar_premio')
+                    ->label('Entregar Premio')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->modalHeading(fn (FormModel $record) => 'Confirmar entrega a '.$record->name)
-                    ->modalDescription(fn (FormModel $record) => new HtmlString("¿Seguro que deseas marcar este premio ecommerce como entregado?<br><br>Cliente: <b>{$record->name}</b><br>Cupón: <b>{$record->code}</b><br>Premio a entregar: <b>".optional($record->prize)->name.'</b>'))
-                    ->visible(fn (FormModel $record) => $record->status === 'registered' && $record->business_unit === 'ECO')
+                    ->slideOver()
+                    ->modalHeading(fn (FormModel $record) => 'Confirmar Entrega de Premio a: '.$record->name)
+                    ->visible(fn (FormModel $record) => in_array($record->status, ['used']) || ($record->status === 'registered' && $record->prize_id))
                     ->form(function (FormModel $record) {
-                        $isCashback = optional($record->prize)->amount > 0;
-
-                        if ($isCashback) {
-                            return [
-                                Forms\Components\FileUpload::make('voucher')
-                                    ->label('Comprobante (Voucher)')
-                                    ->image()
-                                    ->required()
-                                    ->directory('vouchers'),
-                            ];
-                        }
+                        $prizeName = $record->prize?->name ?? 'Premio Asignado';
+                        $prizeAmount = $record->prize?->amount ? 'Bs. '.$record->prize->amount : '';
+                        $branchName = $record->branch ? "{$record->branch->name} ({$record->branch->city})" : 'No asignada';
 
                         return [
-                            Select::make('city')
-                                ->label('Ciudad')
-                                ->options(function () use ($record) {
-                                    return Branch::whereHas('prizes', function ($query) use ($record) {
-                                        $query->where('prize_id', $record->prize_id)
-                                            ->where('stock', '>', 0);
-                                    })
-                                        ->pluck('city', 'city');
-                                })
-                                ->required()
-                                ->live()
-                                ->afterStateUpdated(fn ($set) => $set('branch_id', null)),
-                            Select::make('branch_id')
-                                ->label('Sucursal de Entrega')
-                                ->options(function (Get $get) use ($record) {
-                                    $city = $get('city');
-                                    if (! $city) {
-                                        return [];
-                                    }
-
-                                    return Branch::where('city', $city)
-                                        ->whereHas('prizes', function ($query) use ($record) {
-                                            $query->where('prize_id', $record->prize_id)
-                                                ->where('stock', '>', 0);
-                                        })
-                                        ->pluck('name', 'id');
-                                })
-                                ->searchable()
-                                ->preload()
+                            Placeholder::make('info_entrega')
+                                ->label('')
+                                ->content(new HtmlString("
+                                    <div style='padding: 1.2rem; background-color: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 8px; font-size: 0.95rem; margin-bottom: 10px;'>
+                                        <h4 style='margin: 0 0 6px 0; font-weight: bold; color: #166534;'>🎁 {$prizeName} {$prizeAmount}</h4>
+                                        <p style='margin: 0 0 4px 0; color: #374151;'><b>👤 Cliente:</b> {$record->name} (CI: {$record->ci_number})</p>
+                                        <p style='margin: 0 0 4px 0; color: #374151;'><b>📱 Teléfono:</b> {$record->cellphone}</p>
+                                        <p style='margin: 0 0 4px 0; color: #374151;'><b>🔢 Código:</b> {$record->code}</p>
+                                        <p style='margin: 0; color: #374151;'><b>🏢 Sucursal:</b> {$branchName}</p>
+                                    </div>
+                                ")),
+                            Forms\Components\FileUpload::make('voucher')
+                                ->label('Comprobante de Entrega / Voucher')
+                                ->image()
+                                ->directory('vouchers')
                                 ->required(),
+                            Textarea::make('observations')
+                                ->label('Observaciones de Entrega')
+                                ->placeholder('Ej: Entregado en efectivo en sucursal / Transferencia confirmada'),
                         ];
                     })
                     ->action(function (array $data, FormModel $record) {
-                        $prize = $record->prize;
-                        $amount = optional($prize)->amount ?? 0;
+                        $record->update([
+                            'status' => 'delivered',
+                            'voucher' => $data['voucher'] ?? $record->voucher,
+                            'observations' => $data['observations'] ? ($record->observations ? $record->observations."\n".$data['observations'] : $data['observations']) : $record->observations,
+                            'user_id' => auth()->id(),
+                        ]);
 
-                        DB::transaction(function () use ($record, $data, $amount) {
-                            $updateData = [
-                                'status' => 'delivered',
-                                'user_id' => auth()->id(),
-                            ];
-
-                            if ($amount == 0) {
-                                $branchId = $data['branch_id'];
-                                $updateData['branch_id'] = $branchId;
-
-                                // La resta de stock se hace vía history
-                                PrizeStockHistory::create([
-                                    'prize_id' => $record->prize_id,
-                                    'branch_id' => $branchId,
-                                    'quantity' => -1,
-                                    'type' => 'subtraction',
-                                    'form_id' => $record->id,
-                                    'user_id' => auth()->id(),
-                                    'description' => 'Entrega de premio ecommerce física (manual)',
-                                ]);
-                            } else {
-                                if (isset($data['voucher'])) {
-                                    $updateData['voucher'] = $data['voucher'];
-                                }
-                            }
-
-                            $record->update($updateData);
-
-                            Notification::make()
-                                ->title('Premio Ecommerce Entregado')
-                                ->success()
-                                ->send();
-                        });
+                        Notification::make()
+                            ->title('Premio Entregado con Éxito')
+                            ->body('El formulario ha sido marcado como entregado.')
+                            ->success()
+                            ->send();
                     }),
-                Tables\Actions\Action::make('anular_ecommerce')
-                    ->label('ANULAR')
+                Tables\Actions\Action::make('anular')
+                    ->label('Anular')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->modalHeading('Motivo de la anulación')
-                    ->visible(fn (FormModel $record) => auth()->user()?->isAdmin() && $record->status === 'registered' && $record->business_unit === 'ECO')
+                    ->slideOver()
+                    ->modalHeading('Anulación de Formulario / Premio')
+                    ->visible(fn (FormModel $record) => in_array($record->status, ['registered', 'used', 'pending']))
                     ->form([
-                        Textarea::make('observations')
+                        Textarea::make('invalidation_reason')
                             ->label('Motivo de la anulación')
                             ->required()
-                            ->placeholder('Escriba el motivo aquí...'),
+                            ->placeholder('Escriba el motivo detallado de la anulación aquí...'),
                     ])
                     ->action(function (array $data, FormModel $record) {
                         DB::transaction(function () use ($record, $data) {
-                            // Verificar si ya se repuso el stock para evitar duplicados
+                            $previousStatus = $record->status;
                             $alreadyRestored = PrizeStockHistory::where('form_id', $record->id)
                                 ->where('type', 'addition')
                                 ->exists();
 
-                            if ($alreadyRestored) {
-                                Notification::make()
-                                    ->title('Error')
-                                    ->body('El stock de este formulario ya ha sido repuesto.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-
-                            // Actualizar el formulario
                             $record->update([
                                 'status' => 'invalidated',
-                                'observations' => $data['observations'],
+                                'invalidation_reason' => $data['invalidation_reason'],
                                 'user_id' => auth()->id(),
                             ]);
 
-                            // Reponer stock si tiene premio y sucursal asignada
-                            if ($record->prize_id && $record->branch_id) {
+                            if ($record->prize_id && $record->branch_id && $previousStatus === 'used' && ! $alreadyRestored) {
                                 PrizeStockHistory::create([
                                     'prize_id' => $record->prize_id,
                                     'branch_id' => $record->branch_id,
@@ -516,7 +463,7 @@ class FormResource extends Resource
                                     'type' => 'addition',
                                     'form_id' => $record->id,
                                     'user_id' => auth()->id(),
-                                    'description' => 'Anulación de premio ecommerce - Reposición de stock',
+                                    'description' => 'Anulación de premio - Reposición de stock',
                                 ]);
 
                                 Notification::make()
@@ -527,177 +474,21 @@ class FormResource extends Resource
                             } else {
                                 Notification::make()
                                     ->title('Formulario Anulado')
-                                    ->body('Se ha invalidado el formulario (no se requirió reposición de stock).')
+                                    ->body('Se ha invalidado el formulario.')
                                     ->warning()
                                     ->send();
                             }
                         });
                     }),
-                Tables\Actions\Action::make('entregar_premio')
-                    ->label('Asignar Premio')
-                    ->icon('heroicon-o-gift')
-                    ->color('success')
-                    ->visible(fn (Model $record) => $record->status === 'registered' && $record->business_unit !== 'ECO')
-                    ->form(function (Model $record) {
-                        $invoiceLink = $record->invoice_image ? asset('storage/'.$record->invoice_image) : ($record->invoice_url ?: '#');
-                        $invoiceHtml = $invoiceLink !== '#' ? "<a href='{$invoiceLink}' target='_blank' style='color: #00aa38; text-decoration: underline; font-weight: bold;'>Ver Imagen Adjunta</a>" : "<span style='color: #666;'>Sin adjunto</span>";
-
-                        return [
-                            Placeholder::make('kardex')
-                                ->label('')
-                                ->content(new HtmlString("
-                                    <div style='padding: 1.2rem; background-color: #f7fffa; border-left: 4px solid #00aa38; border-radius: 8px; font-size: 0.95rem; margin-bottom: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);'>
-                                        <h3 style='margin: 0 0 10px 0; font-weight: 800; color: #111; font-size: 1.1rem;'>👤 {$record->name}</h3>
-                                        <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px;'>
-                                            <p style='margin: 0; color: #444;'><b>🎫 CI:</b> {$record->ci_number}</p>
-                                            <p style='margin: 0; color: #444;'><b>📱 Teléfono:</b> {$record->cellphone}</p>
-                                            <p style='margin: 0; color: #444;'><b>📍 Ciudad:</b> {$record->city}</p>
-                                            <p style='margin: 0; color: #444;'><b>📄 Factura:</b> {$invoiceHtml}</p>
-                                        </div>
-                                    </div>
-                                ")),
-                            Select::make('branch_id')
-                                ->label('Sucursal de Entrega')
-                                ->options(fn () => Branch::whereHas('prizes', function ($query) {
-                                    $query->where('stock', '>', 0);
-                                })->get()->mapWithKeys(fn ($b) => [$b->id => "{$b->name} - {$b->city}"]))
-                                ->searchable()
-                                ->preload()
-                                ->live()
-                                ->afterStateUpdated(fn (Set $set) => $set('prize_id', null))
-                                ->required(),
-                            Select::make('prize_id')
-                                ->label('Premio a Entregar')
-                                ->options(function (Get $get) {
-                                    $branchId = $get('branch_id');
-                                    if (! $branchId) {
-                                        return [];
-                                    }
-
-                                    return PrizeBranch::where('branch_id', $branchId)->where('stock', '>', 0)
-                                        ->with('prize')
-                                        ->get()
-                                        ->mapWithKeys(function ($relation) {
-                                            return [$relation->prize_id => "{$relation->prize->name} ({$relation->stock} u)"];
-                                        });
-                                })
-                                ->searchable()
-                                ->preload()
-                                ->required()
-                                ->live(),
-                            Forms\Components\FileUpload::make('voucher')
-                                ->label('Comprobante (Voucher)')
-                                ->image()
-                                ->directory('vouchers')
-                                ->visible(function (Get $get) {
-                                    $prizeId = $get('prize_id');
-                                    if (! $prizeId) {
-                                        return false;
-                                    }
-                                    $prize = Prize::find($prizeId);
-
-                                    return $prize && $prize->amount > 0;
-                                })
-                                ->required(function (Get $get) {
-                                    $prizeId = $get('prize_id');
-                                    if (! $prizeId) {
-                                        return false;
-                                    }
-                                    $prize = Prize::find($prizeId);
-
-                                    return $prize && $prize->amount > 0;
-                                }),
-                        ];
-                    })
-                    ->action(function (array $data, Model $record) {
-                        $prizeId = $data['prize_id'];
-                        $branchId = $data['branch_id'];
-
-                        DB::transaction(function () use ($record, $prizeId, $branchId) {
-                            $stockRelation = PrizeBranch::where('branch_id', $branchId)
-                                ->where('prize_id', $prizeId)
-                                ->lockForUpdate()
-                                ->first();
-
-                            if ($stockRelation && $stockRelation->stock > 0) {
-                                PrizeStockHistory::create([
-                                    'prize_id' => $prizeId,
-                                    'branch_id' => $branchId,
-                                    'quantity' => -1,
-                                    'type' => 'subtraction',
-                                    'form_id' => $record->id,
-                                    'user_id' => auth()->id(),
-                                    'description' => 'Entrega de premio manual mediante panel',
-                                ]);
-
-                                $updateData = [
-                                    'status' => 'delivered',
-                                    'user_id' => auth()->id(),
-                                    'branch_id' => $branchId,
-                                    'prize_id' => $prizeId,
-                                ];
-
-                                if (isset($data['voucher'])) {
-                                    $updateData['voucher'] = $data['voucher'] ?? null;
-                                }
-
-                                $record->update($updateData);
-
-                                Notification::make()
-                                    ->title('Premio Entregado Exitosamente')
-                                    ->success()
-                                    ->send();
-                            } else {
-                                Notification::make()
-                                    ->title('Error')
-                                    ->body('No hay stock disponible para este premio en esa sucursal.')
-                                    ->danger()
-                                    ->send();
-                            }
-                        });
-                    }),
-                Tables\Actions\Action::make('invalidar')
-                    ->label('Invalidar')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->visible(fn (Model $record) => in_array($record->status, ['registered', 'pending']) && $record->business_unit !== 'ECO')
-                    ->form(fn (Model $record) => [
-                        Placeholder::make('kardex_invalidation')
-                            ->label('')
-                            ->content(new HtmlString("
-                                <div style='padding: 1.2rem; background-color: #fff5f5; border-left: 4px solid #e53e3e; border-radius: 8px; font-size: 0.95rem; margin-bottom: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);'>
-                                    <h3 style='margin: 0 0 10px 0; font-weight: 800; color: #c53030; font-size: 1.1rem;'>⚠️ Invalidar a: {$record->name}</h3>
-                                    <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px;'>
-                                        <p style='margin: 0; color: #444;'><b>🎫 CI:</b> {$record->ci_number}</p>
-                                        <p style='margin: 0; color: #444;'><b>📱 Teléfono:</b> {$record->cellphone}</p>
-                                        <p style='margin: 0; color: #444;'><b>📍 Ciudad:</b> {$record->city}</p>
-                                    </div>
-                                </div>
-                            ")),
-                        Textarea::make('invalidation_reason')
-                            ->label('Motivo de invalidación')
-                            ->required()
-                            ->placeholder('Ej: Comprobante no válido, imagen borrosa, etc.'),
-                    ])
-                    ->action(function (array $data, Model $record) {
-                        $record->update([
-                            'status' => 'invalidated',
-                            'user_id' => auth()->id(),
-                            'invalidation_reason' => $data['invalidation_reason'],
-                        ]);
-                        Notification::make()
-                            ->title('Formulario Invalidado')
-                            ->success()
-                            ->send();
-                    }),
                 Tables\Actions\Action::make('cambiar_sucursal')
                     ->label('Cambiar Sucursal')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
+                    ->slideOver()
                     ->requiresConfirmation()
                     ->modalHeading('Cambiar Sucursal / Premio')
                     ->modalDescription('Seleccione la nueva sucursal y premio. Esto restaurará el stock de la sucursal anterior y descontará de la nueva.')
-                    ->visible(fn (FormModel $record) => static::isSpecialUser() && $record->status === 'delivered')
+                    ->visible(fn (FormModel $record) => static::isSpecialUser() && in_array($record->status, ['delivered', 'used']))
                     ->form(function (FormModel $record) {
                         return [
                             Select::make('branch_id')
@@ -802,15 +593,57 @@ class FormResource extends Resource
                     ->label('WhatsApp')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('success')
-                    ->url(fn (Model $record) => "https://wa.me/{$record->cellphone}?text=".urlencode('Hola, te hablamos de Dismac para revisar tu solicitud de la promoción Raspa y Gana Hisense...'))
+                    ->url(fn (Model $record) => "https://wa.me/{$record->cellphone}?text=".urlencode('Hola, te hablamos de Dismac para revisar tu solicitud de la promoción Whirlpool Special Days...'))
                     ->openUrlInNewTab(),
+            ])
+            ->headerActions([
+                Tables\Actions\Action::make('export')
+                    ->label('Exportar Excel')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('success')
+                    ->action(function ($livewire) {
+                        $query = $livewire->getFilteredTableQuery();
+                        $data = $query->with(['prize', 'branch', 'sale', 'user'])->get()->map(fn ($item) => [
+                            'Fecha Registro' => $item->created_at?->format('d/m/Y H:i') ?? '',
+                            'Cliente' => $item->name,
+                            'CI' => $item->ci_number,
+                            'Teléfono' => $item->cellphone,
+                            'Ciudad' => $item->city,
+                            'Código Cupón' => $item->code,
+                            'Código Control' => $item->control_code ?? $item->sale?->control_code ?? '',
+                            'Tipo' => match ($item->type) {
+                                'dismac' => 'Dismac',
+                                'informal-market' => 'Mercado Informal',
+                                default => $item->type ?? '',
+                            },
+                            'Estado' => match ($item->status) {
+                                'registered' => 'Registrado',
+                                'pending' => 'Pendiente',
+                                'used' => 'Utilizado',
+                                'delivered' => 'Entregado',
+                                'invalidated' => 'Invalidado',
+                                default => $item->status ?? '',
+                            },
+                            'Premio' => $item->prize?->name ?? 'Sin asignar',
+                            'Valor Premio (Bs)' => $item->prize?->amount ?? 0,
+                            'Sucursal' => $item->branch?->name ?? 'Sin asignar',
+                            'Canal UDN' => $item->business_unit ?? '',
+                            'Factura / Comprobante' => $item->invoice_view_url ?? '',
+                            'Comprobante Voucher' => $item->voucher ? asset('storage/'.$item->voucher) : '',
+                            'Validado Por' => $item->user?->name ?? '',
+                            'Observaciones' => $item->observations ?? '',
+                            'Motivo Invalidación' => $item->invalidation_reason ?? '',
+                        ]);
+
+                        return (new FastExcel($data))->download('formularios_'.now()->format('Ymd_His').'.xlsx');
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                 ]),
             ])
-            ->defaultPaginationPageOption(100)
-            ->paginationPageOptions([25, 50, 100])
+            ->defaultPaginationPageOption(25)
+            ->paginationPageOptions([10, 25, 50, 100])
             ->defaultSort('created_at', 'desc');
     }
 
@@ -828,7 +661,7 @@ class FormResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return $record->business_unit === 'WEB' || static::isSpecialUser();
+        return auth()->user()?->isAdmin() || static::isSpecialUser();
     }
 
     public static function canDelete(Model $record): bool
@@ -838,6 +671,6 @@ class FormResource extends Resource
 
     protected static function isSpecialUser(): bool
     {
-        return in_array(auth()->user()?->email, ['coranivico@gmail.com', 'admin@dismac.com.bo']);
+        return auth()->user()?->isAdmin() || in_array(auth()->user()?->email, ['coranivico@gmail.com', 'admin@dismac.com.bo']);
     }
 }
