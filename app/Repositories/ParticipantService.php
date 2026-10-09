@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Interfaces\ParticipantServiceInteface;
 use App\Models\Branch;
+use App\Models\Code;
 use App\Models\PrizeBranch;
 use App\Models\PrizeStockHistory;
 use App\Models\Coupon;
@@ -161,14 +162,13 @@ class ParticipantService implements ParticipantServiceInteface
         $participationsQuantity = $sale->valid_sale_items->sum(fn ($item) => $item->quantity ?: 1);
         if ($participationsQuantity > 0) {
             for ($var = 1; $var <= $participationsQuantity; $var++) {
-                // Generamos su formulario
-                $code = \Func::generateCode('App\Models\Form', 'code', 6);
+                // Generamos su formulario (para dismac 'code' permanece null, se identifica por control_code)
                 $form = Form::create([
                     'participant_id' => $participant->id,
                     'name' => $data['name'],
                     'ci_number' => $data['ci_number'],
                     'cellphone' => $data['cellphone'],
-                    'code' => $code,
+                    'code' => null,
                     'invoice_url' => $data['invoice_url'] ?? null,
                     'city' => $data['city'],
                     'status' => 'registered',
@@ -184,7 +184,7 @@ class ParticipantService implements ParticipantServiceInteface
                     'participant_id' => $participant->id,
                     'form_id' => $form->id,
                     'sale_id' => $sale->id,
-                    'code' => $code,
+                    'code' => null,
                     'status' => $form->status,
                     'control_code' => $data['control_code'],
                 ];
@@ -253,10 +253,59 @@ class ParticipantService implements ParticipantServiceInteface
                 'message' => 'No hay stock disponible.',
                 'branch_id' => null,
                 'prize_id' => null,
+                'code_id' => null,
             ];
         }
 
-        // Buscamos todos los premios activos que tengan stock > 0 en esta sucursal
+        if ($form->type === 'dismac') {
+            // Para Dismac, el stock y el premio provienen directamente de los cupones disponibles en la tabla 'codes'
+            $availableCode = Code::with('prize')
+                ->where('is_used', false)
+                ->where('status', 'available')
+                ->whereNotNull('prize_id')
+                ->inRandomOrder()
+                ->lockForUpdate()
+                ->first();
+
+            if (! $availableCode || ! $availableCode->prize) {
+                return [
+                    'success' => false,
+                    'message' => 'No hay stock disponible.',
+                    'branch_id' => $branch->id,
+                    'prize_id' => null,
+                    'code_id' => null,
+                ];
+            }
+
+            // Marcar el cupón de la tabla codes como utilizado
+            $availableCode->update([
+                'is_used' => true,
+                'status' => 'used',
+                'used_at' => now(),
+                'form_id' => $form->id,
+            ]);
+
+            // Generar movimiento de stock en prize_stock_history para auditoría y sincronización de prize_branch
+            PrizeStockHistory::create([
+                'prize_id' => $availableCode->prize_id,
+                'branch_id' => $branch->id,
+                'quantity' => -1,
+                'type' => 'subtraction',
+                'form_id' => $form->id,
+                'description' => "Asignación automática {$branch->channel} al marcar como utilizado (Cupón: {$availableCode->code})",
+            ]);
+
+            return [
+                'success' => true,
+                'branch_id' => $branch->id,
+                'prize_id' => $availableCode->prize_id,
+                'code_id' => $availableCode->id,
+                'prize' => $availableCode->prize,
+                'assigned_code' => $availableCode,
+            ];
+        }
+
+        // Para mercado informal (MAYORISTA), se mantiene la lógica de stock de PrizeBranch
         $availablePrizeBranches = PrizeBranch::with('prize')
             ->where('branch_id', $branch->id)
             ->where('stock', '>', 0)
@@ -272,6 +321,7 @@ class ParticipantService implements ParticipantServiceInteface
                 'message' => 'No hay stock disponible.',
                 'branch_id' => $branch->id,
                 'prize_id' => null,
+                'code_id' => null,
             ];
         }
 
@@ -284,6 +334,7 @@ class ParticipantService implements ParticipantServiceInteface
                 'message' => 'No hay stock disponible.',
                 'branch_id' => $branch->id,
                 'prize_id' => null,
+                'code_id' => null,
             ];
         }
 
@@ -301,8 +352,39 @@ class ParticipantService implements ParticipantServiceInteface
             'success' => true,
             'branch_id' => $branch->id,
             'prize_id' => $randomPrize->id,
+            'code_id' => null,
             'prize' => $randomPrize,
+            'assigned_code' => null,
         ];
+    }
+
+    /**
+     * Da formato a un formulario para respuesta API, adjuntando cupón y fecha de vencimiento si corresponde a Dismac.
+     */
+    public function formatFormData(Form $form): array
+    {
+        $data = $form->toArray();
+
+        if ($form->type === 'dismac' && $form->assignedCode) {
+            $codeModel = $form->assignedCode;
+            $formattedExp = $codeModel->expiration_date ? $codeModel->expiration_date->format('Y-m-d H:i:s') : null;
+
+            $data['code'] = $codeModel->code;
+            $data['expiration_date'] = $formattedExp;
+            $data['assigned_code'] = [
+                'id' => $codeModel->id,
+                'code' => $codeModel->code,
+                'product_code' => $codeModel->product_code,
+                'value' => (float) $codeModel->value,
+                'expiration_date' => $formattedExp,
+                'days_valid' => $codeModel->days_valid,
+            ];
+        } else {
+            $data['assigned_code'] = null;
+            $data['expiration_date'] = null;
+        }
+
+        return $data;
     }
 
     /**
@@ -331,7 +413,7 @@ class ParticipantService implements ParticipantServiceInteface
             return [
                 'success' => false,
                 'status_code' => 404,
-                'message' => 'El código ingresado no existe.',
+                'message' => 'La código de control de la factura o el código único del mercado informal no es válido para participar. Verifica que incluya un producto Whirlpool y vuelve a intentarlo.',
                 'errors' => ['No se encontró ningún formulario asociado al código proporcionado.'],
                 'data' => (object) [],
             ];
@@ -342,12 +424,12 @@ class ParticipantService implements ParticipantServiceInteface
         $controlCode = $matchedForms->first(fn ($f) => ! empty($f->control_code))?->control_code;
 
         if (! empty($controlCode)) {
-            $allForms = Form::with(['prize', 'branch', 'sale'])
+            $allForms = Form::with(['prize', 'branch', 'sale', 'assignedCode'])
                 ->where('control_code', $controlCode)
                 ->orderBy('created_at', 'asc')
                 ->get();
         } else {
-            $allForms = Form::with(['prize', 'branch', 'sale'])
+            $allForms = Form::with(['prize', 'branch', 'sale', 'assignedCode'])
                 ->where('code', $code)
                 ->orderBy('created_at', 'asc')
                 ->get();
@@ -357,6 +439,10 @@ class ParticipantService implements ParticipantServiceInteface
         $registeredForms = $allForms->where('status', 'registered')->values();
         $usedForms = $allForms->where('status', 'used')->values();
         $lastForm = $registeredForms->first();
+
+        $formattedLastForm = $lastForm ? $this->formatFormData($lastForm) : null;
+        $formattedRegisteredForms = $registeredForms->map(fn ($f) => $this->formatFormData($f))->values();
+        $formattedUsedForms = $usedForms->map(fn ($f) => $this->formatFormData($f))->values();
 
         if (! $lastForm) {
             return [
@@ -368,8 +454,8 @@ class ParticipantService implements ParticipantServiceInteface
                     'last_form' => null,
                     'registered_count' => 0,
                     'registered_forms' => [],
-                    'used_count' => $usedForms->count(),
-                    'used_forms' => $usedForms,
+                    'used_count' => $formattedUsedForms->count(),
+                    'used_forms' => $formattedUsedForms,
                 ],
             ];
         }
@@ -379,11 +465,11 @@ class ParticipantService implements ParticipantServiceInteface
             'status_code' => 200,
             'message' => 'El código se validó con éxito.',
             'data' => [
-                'last_form' => $lastForm,
-                'registered_count' => $registeredForms->count(),
-                'registered_forms' => $registeredForms,
-                'used_count' => $usedForms->count(),
-                'used_forms' => $usedForms,
+                'last_form' => $formattedLastForm,
+                'registered_count' => $formattedRegisteredForms->count(),
+                'registered_forms' => $formattedRegisteredForms,
+                'used_count' => $formattedUsedForms->count(),
+                'used_forms' => $formattedUsedForms,
             ],
         ];
     }
@@ -460,17 +546,20 @@ class ParticipantService implements ParticipantServiceInteface
             $form->update([
                 'branch_id' => $prizeAllocation['branch_id'],
                 'prize_id' => $prizeAllocation['prize_id'],
+                'code_id' => $prizeAllocation['code_id'] ?? null,
                 'status' => 'used',
                 'is_scratched' => 1,
             ]);
 
             DB::commit();
 
+            $freshForm = $form->fresh(['prize', 'branch', 'sale', 'assignedCode']);
+
             return [
                 'success' => true,
                 'status_code' => 200,
                 'message' => 'Formulario marcado como utilizado con éxito.',
-                'data' => $form->fresh(['prize', 'branch', 'sale']),
+                'data' => $this->formatFormData($freshForm),
             ];
         } catch (\Exception $e) {
             if (DB::transactionLevel() > 0) {

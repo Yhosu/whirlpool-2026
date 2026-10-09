@@ -82,7 +82,7 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 * **`registered_count`**: Número entero que indica cuántos intentos le quedan disponibles por girar.
 * **`registered_forms`**: Arreglo con todos los formularios activos pendientes de giro.
 * **`used_count`**: Número entero de cuántos intentos ya ha girado el usuario.
-* **`used_forms`**: Arreglo con los formularios que ya fueron girados junto a sus premios obtenidos.
+* **`used_forms`**: Arreglo con los formularios que ya fueron girados junto a sus premios obtenidos. Para formularios `dismac`, cada elemento incluye el código del cupón en `code`, la fecha de vencimiento en `expiration_date` y el objeto completo del cupón en `assigned_code` (en `informal-market` este objeto es `null`).
 
 ---
 
@@ -139,9 +139,9 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 * **Endpoint:** `/api/mark-as-used`
 * **Descripción:** Se debe invocar una vez concluido el giro en la ruleta/lavadora para pasar el estado del formulario de `registered` a `used`, evitando que se vuelva a jugar el mismo intento.
 En este endpoint se realiza la asignación aleatoria del premio y el descuento automático de stock según el tipo de formulario:
-* Si el tipo es `dismac`, se descuenta el stock de la sucursal del canal **`ECOMMERCE`**.
-* Si el tipo es `informal-market`, se descuenta el stock de la sucursal del canal **`MAYORISTA`**.
-Se actualiza el `branch_id` y `prize_id` correspondientes en el formulario. Si no hay stock disponible, la petición retorna error 400.
+* Si el tipo es `dismac`, se asigna un cupón único disponible de la tabla `codes` (vouchers de Dismac), se marca como utilizado en `codes`, se asigna el `prize_id` correspondiente al valor del cupón, y se descuenta el stock de la sucursal del canal **`ECOMMERCE`**. Además, en la respuesta se devuelven los datos del cupón (`code`, `expiration_date` y el objeto `assigned_code`).
+* Si el tipo es `informal-market`, se descuenta el stock de la sucursal del canal **`MAYORISTA`** directamente de `prize_branch` (su campo `code` es el código del formulario generado previamente y `assigned_code` es null).
+Se actualiza el `branch_id`, `prize_id` y `code_id` correspondientes en el formulario. Si no hay stock disponible, la petición retorna error 400.
 
 ### Payload de Envío (Request Body JSON):
 ```json
@@ -164,15 +164,25 @@ Se actualiza el `branch_id` y `prize_id` correspondientes en el formulario. Si n
   "message": "Formulario marcado como utilizado con éxito.",
   "data": {
     "id": "e4b3c2a1-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
-    "code": "A1B2C3",
+    "code": "F5714PCDQW",
+    "code_id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
     "status": "used",
     "is_scratched": 1,
     "prize_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
     "branch_id": "8a0deb3c-2a6c-4cad-8acc-1a9c6a2cba5c",
+    "expiration_date": "2027-01-04 14:18:17",
+    "assigned_code": {
+      "id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "code": "F5714PCDQW",
+      "product_code": "TC1000S",
+      "value": 1000,
+      "expiration_date": "2027-01-04 14:18:17",
+      "days_valid": 90
+    },
     "prize": {
       "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "name": "Premio 500 Bs",
-      "amount": "500.00"
+      "name": "Premio 1000 Bs",
+      "amount": "1000.00"
     },
     "branch": {
       "id": "8a0deb3c-2a6c-4cad-8acc-1a9c6a2cba5c",

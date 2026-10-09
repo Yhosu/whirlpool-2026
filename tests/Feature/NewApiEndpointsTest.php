@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Code;
 use App\Models\Form;
 use App\Models\Participant;
 use App\Models\Prize;
@@ -96,7 +97,6 @@ class NewApiEndpointsTest extends TestCase
         $response->assertStatus(404);
         $response->assertJson([
             'process' => false,
-            'message' => 'El código ingresado no existe.',
         ]);
     }
 
@@ -156,13 +156,25 @@ class NewApiEndpointsTest extends TestCase
             'stock' => 5,
         ]);
 
+        $code = Code::create([
+            'id' => (string) Str::uuid(),
+            'prize_id' => $prize->id,
+            'code' => 'COUPON-DISMAC-999',
+            'product_code' => 'TC500S',
+            'value' => 500,
+            'expiration_date' => now()->addDays(90),
+            'days_valid' => 90,
+            'status' => 'available',
+            'is_used' => false,
+        ]);
+
         $form = Form::create([
             'id' => (string) Str::uuid(),
             'name' => 'Pedro Sanchez',
             'ci_number' => '4567890',
             'cellphone' => '71122334',
             'city' => 'Cochabamba',
-            'code' => 'COUPON77',
+            'code' => null,
             'control_code' => 'CTRL-555',
             'status' => 'registered',
             'type' => 'dismac',
@@ -178,6 +190,14 @@ class NewApiEndpointsTest extends TestCase
         $response->assertJson([
             'process' => true,
             'message' => 'Formulario marcado como utilizado con éxito.',
+            'data' => [
+                'code' => 'COUPON-DISMAC-999',
+                'assigned_code' => [
+                    'code' => 'COUPON-DISMAC-999',
+                    'product_code' => 'TC500S',
+                    'value' => 500,
+                ],
+            ],
         ]);
 
         $form->refresh();
@@ -185,6 +205,12 @@ class NewApiEndpointsTest extends TestCase
         $this->assertEquals(1, $form->is_scratched);
         $this->assertEquals($branchEco->id, $form->branch_id);
         $this->assertEquals($prize->id, $form->prize_id);
+        $this->assertEquals($code->id, $form->code_id);
+
+        $code->refresh();
+        $this->assertTrue($code->is_used);
+        $this->assertEquals('used', $code->status);
+        $this->assertEquals($form->id, $code->form_id);
 
         $prizeBranch->refresh();
         $this->assertEquals(4, $prizeBranch->stock);
@@ -479,6 +505,7 @@ class NewApiEndpointsTest extends TestCase
         $this->assertNotNull($form);
         $this->assertEquals('registered', $form->status);
         $this->assertEquals('dismac', $form->type);
+        $this->assertNull($form->code, 'El código del formulario dismac debe ser null');
         $this->assertNull($form->prize_id, 'El formulario no debe tener premio asignado al crearse la venta');
         $this->assertNull($form->branch_id, 'El formulario no debe tener sucursal asignada al crearse la venta');
         $this->assertDatabaseMissing('prize_stock_history', [

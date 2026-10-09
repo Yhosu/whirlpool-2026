@@ -40,7 +40,8 @@ final class Form extends Model
         'voucher',
         'observations',
         'type',
-        'control_code'
+        'control_code',
+        'code_id',
     ];
 
     public $timestamps = true;
@@ -78,6 +79,11 @@ final class Form extends Model
     public function participant(): BelongsTo
     {
         return $this->belongsTo(Participant::class, 'participant_id');
+    }
+
+    public function assignedCode(): BelongsTo
+    {
+        return $this->belongsTo(Code::class, 'code_id');
     }
 
     public function getInvoiceViewUrlAttribute(): ?string

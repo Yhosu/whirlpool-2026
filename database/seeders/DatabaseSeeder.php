@@ -38,5 +38,6 @@ class DatabaseSeeder extends Seeder
 
         SeederFunc::loadData();
         $this->call(PrizeAndBranchSeeder::class);
+        $this->call(CodeSeeder::class);
     }
 }
