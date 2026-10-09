@@ -413,7 +413,7 @@ class ParticipantService implements ParticipantServiceInteface
             return [
                 'success' => false,
                 'status_code' => 404,
-                'message' => 'La código de control de la factura o el código único del mercado informal no es válido para participar. Verifica que incluya un producto Whirlpool y vuelve a intentarlo.',
+                'message' => 'El código de control de la factura o el código único del mercado informal no es válido para participar. Verifica que incluya un producto Whirlpool y vuelve a intentarlo.',
                 'errors' => ['No se encontró ningún formulario asociado al código proporcionado.'],
                 'data' => (object) [],
             ];
