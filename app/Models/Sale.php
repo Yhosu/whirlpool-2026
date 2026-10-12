@@ -46,7 +46,9 @@ final class Sale extends Model
 
     public function valid_sale_items(): HasMany
     {
-        return $this->hasMany(SaleItem::class, 'sale_id', 'id')->whereIn('code_brand', [2]);
+        return $this->hasMany(SaleItem::class, 'sale_id', 'id')
+            ->whereIn('code_brand', [2])
+            ->whereRaw('(amount / IFNULL(NULLIF(quantity, 0), 1)) >= 100');
     }
 
     public function participant()

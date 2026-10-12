@@ -32,6 +32,7 @@ final class Form extends Model
         'code',
         'status',
         'sale_id',
+        'sale_item_id',
         'branch_id',
         'prize_id',
         'user_id',
@@ -66,6 +67,16 @@ final class Form extends Model
         return $this->belongsTo(Sale::class, 'sale_id');
     }
 
+    public function sale_item(): BelongsTo
+    {
+        return $this->belongsTo(SaleItem::class, 'sale_item_id');
+    }
+
+    public function saleItem(): BelongsTo
+    {
+        return $this->belongsTo(SaleItem::class, 'sale_item_id');
+    }
+
     public function prize(): BelongsTo
     {
         return $this->belongsTo(Prize::class, 'prize_id');
@@ -84,6 +95,19 @@ final class Form extends Model
     public function assignedCode(): BelongsTo
     {
         return $this->belongsTo(Code::class, 'code_id');
+    }
+
+    public function getUnitAmountAttribute(): ?float
+    {
+        if ($this->sale_item) {
+            return $this->sale_item->unit_amount;
+        }
+
+        if ($this->sale && $this->sale->valid_sale_items && $this->sale->valid_sale_items->isNotEmpty()) {
+            return $this->sale->valid_sale_items->first()?->unit_amount;
+        }
+
+        return null;
     }
 
     public function getInvoiceViewUrlAttribute(): ?string
@@ -107,6 +131,23 @@ final class Form extends Model
         }
 
         return null;
+    }
+
+    public function getVoucherViewUrlAttribute(): ?string
+    {
+        if (empty($this->voucher)) {
+            return null;
+        }
+
+        if (str_starts_with($this->voucher, 'http')) {
+            return $this->voucher;
+        }
+
+        if (config('filesystems.disks.s3.bucket')) {
+            return \Illuminate\Support\Facades\Storage::disk('s3')->url($this->voucher);
+        }
+
+        return asset('storage/'.$this->voucher);
     }
 }
 

@@ -15,6 +15,7 @@ use App\Models\Participant;
 use App\Models\ParticipantCoupon;
 use App\Models\Prize;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Services\FileUploadService;
 use Exception;
 use Illuminate\Support\Facades\Cache;
@@ -157,11 +158,23 @@ class ParticipantService implements ParticipantServiceInteface
         $sale->sale_items()->createMany($data['sale_items']);
         $sale->load('valid_sale_items');         // WHIRLPOOL
 
-        // VALIDACIONES WHIRLPOOL
-        $amountSale = $sale->valid_sale_items->sum('amount') ?? 0;
-        $participationsQuantity = $sale->valid_sale_items->sum(fn ($item) => $item->quantity ?: 1);
-        if ($participationsQuantity > 0) {
-            for ($var = 1; $var <= $participationsQuantity; $var++) {
+        // VALIDACIONES WHIRLPOOL:
+        // Solo code_brand = 2 y monto unitario >= 100 participan
+        $validSaleItems = $sale->valid_sale_items->filter(function ($item) {
+            $quantity = max(1, (int) ($item->quantity ?: 1));
+            $unitAmount = (float) $item->amount / $quantity;
+
+            return (int) $item->code_brand === 2 && $unitAmount >= 100;
+        });
+
+        $amountSale = $validSaleItems->sum('amount') ?? 0;
+        $participationsQuantity = 0;
+
+        foreach ($validSaleItems as $item) {
+            $itemQuantity = max(1, (int) ($item->quantity ?: 1));
+            $participationsQuantity += $itemQuantity;
+
+            for ($var = 1; $var <= $itemQuantity; $var++) {
                 // Generamos su formulario (para dismac 'code' permanece null, se identifica por control_code)
                 $form = Form::create([
                     'participant_id' => $participant->id,
@@ -175,10 +188,11 @@ class ParticipantService implements ParticipantServiceInteface
                     'control_code' => $data['control_code'],
                     'business_unit' => $businessUnit,
                     'sale_id' => $sale->id,
+                    'sale_item_id' => $item->id,
                     'branch_id' => null,
                     'prize_id' => null,
                     'user_id' => null,
-                    'type' => 'dismac'
+                    'type' => 'dismac',
                 ]);
                 $validCoupons[] = [
                     'participant_id' => $participant->id,
@@ -190,12 +204,76 @@ class ParticipantService implements ParticipantServiceInteface
                 ];
             }
         }
+
         return $sale;
     }
 
     /**
+     * Obtiene el monto unitario asociado a un formulario a partir de su ítem de venta o de la venta.
+     */
+    public function getUnitAmountForForm(Form $form): ?float
+    {
+        $item = $form->relationLoaded('sale_item') ? $form->sale_item : null;
+
+        if (! $item && ! empty($form->sale_item_id)) {
+            $item = SaleItem::find($form->sale_item_id);
+        }
+
+        if ($item) {
+            $qty = max(1, (int) ($item->quantity ?: 1));
+
+            return (float) $item->amount / $qty;
+        }
+
+        if (! empty($form->sale_id)) {
+            $sale = $form->relationLoaded('sale') ? $form->sale : null;
+            if (! $sale) {
+                $sale = Sale::with('valid_sale_items')->find($form->sale_id);
+            }
+            if ($sale && $sale->valid_sale_items && $sale->valid_sale_items->isNotEmpty()) {
+                $item = $sale->valid_sale_items->sortByDesc(function ($i) {
+                    $qty = max(1, (int) ($i->quantity ?: 1));
+
+                    return (float) $i->amount / $qty;
+                })->first();
+
+                if ($item) {
+                    $qty = max(1, (int) ($item->quantity ?: 1));
+
+                    return (float) $item->amount / $qty;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Determina los valores de premio permitidos para un formulario según su monto unitario.
+     * Reglas de la promoción:
+     * - Monto unitario mayor a 100 participa.
+     * - Monto unitario entre 100 y 2600: solo pueden recibir 100 o 250 Bs como premio.
+     * - Monto unitario entre 2601 o más: puede recibir 100, 250, 500, 1000, 2000 o 3000 Bs.
+     */
+    public function getAllowedPrizeValuesForForm(Form $form): array
+    {
+        $unitAmount = $this->getUnitAmountForForm($form);
+
+        if ($unitAmount !== null) {
+            if ($unitAmount <= 2600) {
+                return [100, 250];
+            } else {
+                return [100, 250, 500, 1000, 2000, 3000];
+            }
+        }
+
+        // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles
+        return [100, 250, 500, 1000, 2000, 3000];
+    }
+
+    /**
      * Selecciona un premio aleatorio con stock disponible en el canal ECOMMERCE
-     * y realiza el descuento automático.
+     * y realiza el descuento automático, respetando los montos de premio permitidos.
      */
     public function assignRandomEcommercePrize(string $formId): array
     {
@@ -204,8 +282,12 @@ class ParticipantService implements ParticipantServiceInteface
             return ['branch_id' => null, 'prize_id' => null];
         }
 
-        // Buscamos todos los premios activos que tengan stock > 0 en esta sucursal
+        $form = Form::find($formId);
+        $allowedValues = $form ? $this->getAllowedPrizeValuesForForm($form) : [100, 250, 500, 1000, 2000, 3000];
+
+        // Buscamos todos los premios activos que tengan stock > 0 en esta sucursal y monto permitido
         $availablePrizes = Prize::where('active', 1)
+            ->whereIn('amount', $allowedValues)
             ->whereHas('branches', function ($query) use ($branch) {
                 $query->where('branch_id', $branch->id)
                     ->where('stock', '>', 0);
@@ -241,6 +323,7 @@ class ParticipantService implements ParticipantServiceInteface
     /**
      * Selecciona un premio aleatorio con stock disponible según el tipo de formulario
      * (dismac -> ECOMMERCE, informal-market -> MAYORISTA) y realiza el descuento automático.
+     * Aplica la regla de premios permitidos según el monto unitario del producto.
      */
     public function assignRandomPrizeByForm(Form $form): array
     {
@@ -257,12 +340,15 @@ class ParticipantService implements ParticipantServiceInteface
             ];
         }
 
+        $allowedValues = $this->getAllowedPrizeValuesForForm($form);
+
         if ($form->type === 'dismac') {
             // Para Dismac, el stock y el premio provienen directamente de los cupones disponibles en la tabla 'codes'
             $availableCode = Code::with('prize')
                 ->where('is_used', false)
                 ->where('status', 'available')
                 ->whereNotNull('prize_id')
+                ->whereIn('value', $allowedValues)
                 ->inRandomOrder()
                 ->lockForUpdate()
                 ->first();
@@ -309,8 +395,9 @@ class ParticipantService implements ParticipantServiceInteface
         $availablePrizeBranches = PrizeBranch::with('prize')
             ->where('branch_id', $branch->id)
             ->where('stock', '>', 0)
-            ->whereHas('prize', function ($query) {
-                $query->where('active', 1);
+            ->whereHas('prize', function ($query) use ($allowedValues) {
+                $query->where('active', 1)
+                    ->whereIn('amount', $allowedValues);
             })
             ->lockForUpdate()
             ->get();
@@ -437,12 +524,18 @@ class ParticipantService implements ParticipantServiceInteface
 
         // Filtrar formularios según estado
         $registeredForms = $allForms->where('status', 'registered')->values();
-        $usedForms = $allForms->where('status', 'used')->values();
+        $usedForms = $allForms->whereIn('status', ['used', 'delivered'])->values();
         $lastForm = $registeredForms->first();
 
         $formattedLastForm = $lastForm ? $this->formatFormData($lastForm) : null;
         $formattedRegisteredForms = $registeredForms->map(fn ($f) => $this->formatFormData($f))->values();
-        $formattedUsedForms = $usedForms->map(fn ($f) => $this->formatFormData($f))->values();
+        $formattedUsedForms = $usedForms->map(function ($f) {
+            $formatted = $this->formatFormData($f);
+            // Ambos estados (used y delivered) se visualizan en el frontend como utilizados
+            $formatted['status'] = 'used';
+
+            return $formatted;
+        })->values();
 
         if (! $lastForm) {
             return [
@@ -553,7 +646,7 @@ class ParticipantService implements ParticipantServiceInteface
 
             DB::commit();
 
-            $freshForm = $form->fresh(['prize', 'branch', 'sale', 'assignedCode']);
+            $freshForm = $form->fresh(['prize', 'branch', 'sale', 'assignedCode', 'sale_item']);
 
             return [
                 'success' => true,

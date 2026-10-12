@@ -90,6 +90,81 @@ class NewApiEndpointsTest extends TestCase
         $this->assertTrue($responseByCode->json('process'));
     }
 
+    public function test_check_code_includes_delivered_forms_in_used_forms_and_presents_them_as_used(): void
+    {
+        $participant = Participant::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Carla Mendoza',
+            'ci_number' => '44556677',
+            'cellphone' => '71122334',
+            'city' => 'Santa Cruz',
+            'status' => 'registered',
+        ]);
+
+        $controlCode = 'CTRL-DELIVERED-TEST';
+
+        // Form 1: registrado (intento pendiente de girar)
+        $formRegistered = Form::create([
+            'id' => (string) Str::uuid(),
+            'participant_id' => $participant->id,
+            'name' => $participant->name,
+            'ci_number' => $participant->ci_number,
+            'cellphone' => $participant->cellphone,
+            'city' => $participant->city,
+            'code' => 'COD-REG',
+            'control_code' => $controlCode,
+            'status' => 'registered',
+            'business_unit' => 'informal-market',
+        ]);
+
+        // Form 2: used (ya giró)
+        $formUsed = Form::create([
+            'id' => (string) Str::uuid(),
+            'participant_id' => $participant->id,
+            'name' => $participant->name,
+            'ci_number' => $participant->ci_number,
+            'cellphone' => $participant->cellphone,
+            'city' => $participant->city,
+            'code' => 'COD-USED',
+            'control_code' => $controlCode,
+            'status' => 'used',
+            'business_unit' => 'informal-market',
+        ]);
+
+        // Form 3: delivered (ya giró y se confirmó la transferencia/entrega)
+        $formDelivered = Form::create([
+            'id' => (string) Str::uuid(),
+            'participant_id' => $participant->id,
+            'name' => $participant->name,
+            'ci_number' => $participant->ci_number,
+            'cellphone' => $participant->cellphone,
+            'city' => $participant->city,
+            'code' => 'COD-DELIV',
+            'control_code' => $controlCode,
+            'status' => 'delivered',
+            'business_unit' => 'informal-market',
+        ]);
+
+        $response = $this->getJson("/api/check-code/{$controlCode}");
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        $this->assertEquals(1, $data['registered_count']);
+        // used_count debe ser 2 (1 used + 1 delivered)
+        $this->assertEquals(2, $data['used_count']);
+        $this->assertCount(2, $data['used_forms']);
+
+        $usedIds = collect($data['used_forms'])->pluck('id')->all();
+        $this->assertContains($formUsed->id, $usedIds);
+        $this->assertContains($formDelivered->id, $usedIds);
+
+        // Ambos formularios deben presentarse en el frontend con status 'used'
+        foreach ($data['used_forms'] as $usedFormItem) {
+            $this->assertEquals('used', $usedFormItem['status']);
+        }
+    }
+
     public function test_check_code_returns_404_when_code_does_not_exist(): void
     {
         $response = $this->getJson('/api/check-code/NONEXISTENT999');

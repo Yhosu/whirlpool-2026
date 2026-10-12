@@ -8,6 +8,7 @@ use App\Models\Prize;
 use App\Models\PrizeBranch;
 use App\Models\PrizeStockHistory;
 use App\Models\Form as FormModel;
+use App\Services\FileUploadService;
 use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Components\DatePicker;
@@ -233,10 +234,10 @@ class FormResource extends Resource
                             ->url(fn (FormModel $record) => $record->invoice_view_url)
                             ->openUrlInNewTab(),
                         Tables\Columns\TextColumn::make('voucher')
-                            ->label('Comprobante de Entrega')
+                            ->label('Comprobante de Entrega / Transferencia')
                             ->formatStateUsing(fn ($state) => $state ? '✅ Ver / Descargar Comprobante' : 'Sin Comprobante')
                             ->color(fn ($state) => $state ? 'success' : 'gray')
-                            ->url(fn (Model $record) => $record->voucher ? asset('storage/'.$record->voucher) : null)
+                            ->url(fn (FormModel $record) => $record->voucher_view_url)
                             ->openUrlInNewTab(),
                         Tables\Columns\TextColumn::make('observations')
                             ->label('Observaciones')
@@ -343,9 +344,8 @@ class FormResource extends Resource
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
                     ->button()
-                    ->slideOver()
                     ->requiresConfirmation()
-                    ->modalHeading(fn (FormModel $record) => 'Validar Formulario: '.$record->name)
+                    ->modalHeading(fn (FormModel $record) => '¿Está seguro de validar este registro? ('.$record->name.')')
                     ->modalDescription(function (FormModel $record) {
                         $invoiceLink = $record->invoice_view_url ?: '#';
                         $invoiceHtml = $invoiceLink !== '#' ? "<a href='{$invoiceLink}' target='_blank' style='color: #00aa38; text-decoration: underline; font-weight: bold;'>🔍 Ver Factura / Comprobante Adjunto</a>" : "<span style='color: #666;'>Sin adjunto</span>";
@@ -358,12 +358,14 @@ class FormResource extends Resource
                                     <p style='margin: 0; color: #444;'><b>📱 Celular:</b> {$record->cellphone}</p>
                                     <p style='margin: 0; color: #444;'><b>📍 Ciudad:</b> {$record->city}</p>
                                     <p style='margin: 0; color: #444;'><b>🔢 Código:</b> {$record->code}</p>
-                                    <p style='margin: 0; grid-column: span 2;'><b>📄 Factura:</b> {$invoiceHtml}</p>
+                                    <p style='margin: 0; color: #444;'><b>🏪 Canal:</b> {$record->business_unit}</p>
+                                    <p style='margin: 0;'><b>📄 Factura:</b> {$invoiceHtml}</p>
                                 </div>
                             </div>
-                            <p style='margin: 0; color: #555;'>Al validar este formulario, su estado cambiará a <b>Registrado</b> para habilitar su participación en la ruleta/lavadora.</p>
+                            <p style='margin: 0; color: #555;'>¿Está seguro de validar este formulario? Al confirmarlo, su estado cambiará a <b>Registrado</b> y quedará habilitado para participar en la ruleta / lavadora.</p>
                         ");
                     })
+                    ->modalSubmitActionLabel('Sí, validar registro')
                     ->visible(fn (FormModel $record) => $record->status === 'pending')
                     ->action(function (FormModel $record) {
                         $record->update([
@@ -382,16 +384,19 @@ class FormResource extends Resource
                 Tables\Actions\EditAction::make()
                     ->slideOver(),
                 Tables\Actions\Action::make('entregar_premio')
-                    ->label('Entregar Premio')
-                    ->icon('heroicon-o-check-circle')
+                    ->label(fn (FormModel $record) => $record->business_unit === 'informal-market' ? 'Confirmar Transferencia' : 'Entregar Premio')
+                    ->icon(fn (FormModel $record) => $record->business_unit === 'informal-market' ? 'heroicon-o-banknotes' : 'heroicon-o-check-circle')
                     ->color('success')
                     ->slideOver()
-                    ->modalHeading(fn (FormModel $record) => 'Confirmar Entrega de Premio a: '.$record->name)
+                    ->modalHeading(fn (FormModel $record) => $record->business_unit === 'informal-market'
+                        ? 'Confirmar Transferencia Bancaria: '.$record->name
+                        : 'Confirmar Entrega de Premio a: '.$record->name)
                     ->visible(fn (FormModel $record) => in_array($record->status, ['used']) || ($record->status === 'registered' && $record->prize_id))
                     ->form(function (FormModel $record) {
                         $prizeName = $record->prize?->name ?? 'Premio Asignado';
                         $prizeAmount = $record->prize?->amount ? 'Bs. '.$record->prize->amount : '';
                         $branchName = $record->branch ? "{$record->branch->name} ({$record->branch->city})" : 'No asignada';
+                        $isInformalMarket = $record->business_unit === 'informal-market';
 
                         return [
                             Placeholder::make('info_entrega')
@@ -402,30 +407,49 @@ class FormResource extends Resource
                                         <p style='margin: 0 0 4px 0; color: #374151;'><b>👤 Cliente:</b> {$record->name} (CI: {$record->ci_number})</p>
                                         <p style='margin: 0 0 4px 0; color: #374151;'><b>📱 Teléfono:</b> {$record->cellphone}</p>
                                         <p style='margin: 0 0 4px 0; color: #374151;'><b>🔢 Código:</b> {$record->code}</p>
-                                        <p style='margin: 0; color: #374151;'><b>🏢 Sucursal:</b> {$branchName}</p>
+                                        <p style='margin: 0 0 4px 0; color: #374151;'><b>🏢 Sucursal:</b> {$branchName}</p>
+                                        ".($isInformalMarket ? "<p style='margin: 4px 0 0 0; color: #047857; font-weight: 600;'>ℹ️ Suba la foto del comprobante de transferencia bancaria para confirmar la entrega y archivar en S3 optimizado.</p>" : "")."
                                     </div>
                                 ")),
                             Forms\Components\FileUpload::make('voucher')
-                                ->label('Comprobante de Entrega / Voucher')
+                                ->label($isInformalMarket ? 'Comprobante de Transferencia Bancaria (Foto/PDF)' : 'Comprobante de Entrega / Voucher')
                                 ->image()
-                                ->directory('vouchers')
+                                ->directory('temp-vouchers')
                                 ->required(),
                             Textarea::make('observations')
                                 ->label('Observaciones de Entrega')
-                                ->placeholder('Ej: Entregado en efectivo en sucursal / Transferencia confirmada'),
+                                ->placeholder($isInformalMarket ? 'Ej: Transferencia bancaria realizada con éxito' : 'Ej: Entregado en efectivo en sucursal / Transferencia confirmada'),
                         ];
                     })
                     ->action(function (array $data, FormModel $record) {
+                        $voucherPath = $record->voucher;
+
+                        if (!empty($data['voucher'])) {
+                            try {
+                                $uploadResult = FileUploadService::uploadOptimizedFile($data['voucher'], 'vouchers');
+                                $voucherPath = $uploadResult['path'];
+                            } catch (\Throwable $e) {
+                                Notification::make()
+                                    ->title('Error al procesar el comprobante')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+                        }
+
                         $record->update([
                             'status' => 'delivered',
-                            'voucher' => $data['voucher'] ?? $record->voucher,
-                            'observations' => $data['observations'] ? ($record->observations ? $record->observations."\n".$data['observations'] : $data['observations']) : $record->observations,
+                            'voucher' => $voucherPath,
+                            'observations' => !empty($data['observations'])
+                                ? ($record->observations ? $record->observations."\n".$data['observations'] : $data['observations'])
+                                : $record->observations,
                             'user_id' => auth()->id(),
                         ]);
 
                         Notification::make()
-                            ->title('Premio Entregado con Éxito')
-                            ->body('El formulario ha sido marcado como entregado.')
+                            ->title($record->business_unit === 'informal-market' ? 'Transferencia Bancaria Confirmada' : 'Premio Entregado con Éxito')
+                            ->body('El comprobante fue optimizado y guardado en S3. El estado cambió a Entregado.')
                             ->success()
                             ->send();
                     }),
@@ -629,7 +653,7 @@ class FormResource extends Resource
                             'Sucursal' => $item->branch?->name ?? 'Sin asignar',
                             'Canal UDN' => $item->business_unit ?? '',
                             'Factura / Comprobante' => $item->invoice_view_url ?? '',
-                            'Comprobante Voucher' => $item->voucher ? asset('storage/'.$item->voucher) : '',
+                            'Comprobante Voucher' => $item->voucher_view_url ?? '',
                             'Validado Por' => $item->user?->name ?? '',
                             'Observaciones' => $item->observations ?? '',
                             'Motivo Invalidación' => $item->invalidation_reason ?? '',
