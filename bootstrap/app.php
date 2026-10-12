@@ -25,5 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->report(function (\Throwable $e) {
+            \App\Services\ErrorNotificationService::notify($e);
+        });
     })->create();
