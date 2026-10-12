@@ -22,6 +22,7 @@ class RegisterParticipantRequest extends FormRequest
      *
      * @bodyParam sale_items.*.code_brand integer required El código de la marca debe ser un número entero. Example: 15
      * @bodyParam sale_items.*.quantity integer Opcional. La cantidad de ítems. Por defecto es 1. Example: 2
+     * @bodyParam sale_items.*.category integer|string Opcional. Código de la categoría. Las categorías 135, 129 y 123 corresponden a repuestos y componentes y se excluyen de la validación. Example: 135
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -49,6 +50,8 @@ class RegisterParticipantRequest extends FormRequest
             'sale_items.*.amount' => 'required|min:1',
             'sale_items.*.name' => 'nullable',
             'sale_items.*.quantity' => 'nullable|integer|min:1',
+            'sale_items.*.category' => 'nullable',
+            'sale_items.*.code_category' => 'nullable',
         ];
     }
 

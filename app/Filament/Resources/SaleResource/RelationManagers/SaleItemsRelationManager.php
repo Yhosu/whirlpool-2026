@@ -33,6 +33,9 @@ class SaleItemsRelationManager extends RelationManager
                 Forms\Components\TextInput::make('code_brand')
                     ->label('Código de Marca')
                     ->numeric(),
+                Forms\Components\TextInput::make('category')
+                    ->label('Categoría')
+                    ->numeric(),
                 Forms\Components\TextInput::make('name_brand')
                     ->label('Nombre de Marca')
                     ->maxLength(255),
@@ -55,6 +58,8 @@ class SaleItemsRelationManager extends RelationManager
                     ->numeric(),
                 Tables\Columns\TextColumn::make('name_brand')
                     ->label('Marca'),
+                Tables\Columns\TextColumn::make('category')
+                    ->label('Categoría'),
                 Tables\Columns\TextColumn::make('quantity')
                     ->label('Cantidad')
                     ->numeric(),

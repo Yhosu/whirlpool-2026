@@ -48,6 +48,10 @@ final class Sale extends Model
     {
         return $this->hasMany(SaleItem::class, 'sale_id', 'id')
             ->whereIn('code_brand', [2])
+            ->where(function ($query) {
+                $query->whereNull('category')
+                    ->orWhereNotIn('category', [123, 129, 135]);
+            })
             ->whereRaw('(amount / IFNULL(NULLIF(quantity, 0), 1)) >= 100');
     }
 

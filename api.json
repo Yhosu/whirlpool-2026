@@ -473,6 +473,14 @@
                                         "null"
                                     ],
                                     "minimum": 1
+                                },
+                                "category": {
+                                    "type": [
+                                        "integer",
+                                        "string",
+                                        "null"
+                                    ],
+                                    "description": "Código de categoría. Se excluyen de la validación las categorías 135, 129 y 123 (repuestos y componentes)."
                                 }
                             },
                             "required": [

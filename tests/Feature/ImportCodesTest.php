@@ -7,6 +7,7 @@ use App\Models\Code;
 use App\Models\Form;
 use App\Models\Prize;
 use App\Models\PrizeBranch;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -14,6 +15,12 @@ use Tests\TestCase;
 class ImportCodesTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
 
     public function test_import_codes_command_populates_codes_table_from_excel_files(): void
     {
@@ -50,6 +57,8 @@ class ImportCodesTest extends TestCase
 
     public function test_mark_as_used_assigns_coupon_and_marks_it_used_in_codes_table(): void
     {
+        Carbon::setTestNow('2026-10-19 12:00:00');
+
         $branchEco = Branch::create([
             'id' => (string) Str::uuid(),
             'name' => 'Central Dismac',

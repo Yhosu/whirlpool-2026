@@ -17,6 +17,7 @@ use App\Models\Prize;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Services\FileUploadService;
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -155,16 +156,29 @@ class ParticipantService implements ParticipantServiceInteface
         ];
         $businessUnit = $data['business_unit'];
         $sale = Sale::create($saleData);
-        $sale->sale_items()->createMany($data['sale_items']);
+
+        $saleItemsData = array_map(function ($item) {
+            if (! isset($item['category']) && isset($item['code_category'])) {
+                $item['category'] = $item['code_category'];
+            }
+
+            return $item;
+        }, $data['sale_items']);
+
+        $sale->sale_items()->createMany($saleItemsData);
         $sale->load('valid_sale_items');         // WHIRLPOOL
 
         // VALIDACIONES WHIRLPOOL:
-        // Solo code_brand = 2 y monto unitario >= 100 participan
+        // Solo code_brand = 2 y monto unitario >= 100 participan.
+        // Se excluyen las categorías 135, 129 y 123 (repuestos y componentes).
         $validSaleItems = $sale->valid_sale_items->filter(function ($item) {
             $quantity = max(1, (int) ($item->quantity ?: 1));
             $unitAmount = (float) $item->amount / $quantity;
+            $category = $item->category !== null ? (int) $item->category : null;
 
-            return (int) $item->code_brand === 2 && $unitAmount >= 100;
+            return (int) $item->code_brand === 2
+                && $unitAmount >= 100
+                && ($category === null || ! in_array($category, [123, 129, 135], true));
         });
 
         $amountSale = $validSaleItems->sum('amount') ?? 0;
@@ -261,14 +275,23 @@ class ParticipantService implements ParticipantServiceInteface
 
         if ($unitAmount !== null) {
             if ($unitAmount <= 2600) {
-                return [100, 250];
+                $allowed = [100, 250];
             } else {
-                return [100, 250, 500, 1000, 2000, 3000];
+                $allowed = [100, 250, 500, 1000, 2000, 3000];
             }
+        } else {
+            // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles
+            $allowed = [100, 250, 500, 1000, 2000, 3000];
         }
 
-        // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles
-        return [100, 250, 500, 1000, 2000, 3000];
+        // Restricción adicional temporal: Hasta el domingo 18 de octubre de 2026 (inclusive)
+        // se restringe la salida máxima de premios únicamente a 100, 250 y 500 Bs,
+        // respetando las reglas base ya definidas.
+        if (now()->lte(Carbon::parse('2026-10-18 23:59:59'))) {
+            $allowed = array_values(array_intersect($allowed, [100, 250, 500]));
+        }
+
+        return $allowed;
     }
 
     /**

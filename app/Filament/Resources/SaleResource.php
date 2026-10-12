@@ -106,6 +106,9 @@ class SaleResource extends Resource
                         Forms\Components\TextInput::make('code_brand')
                             ->label('Cod. Marca')
                             ->disabled(),
+                        Forms\Components\TextInput::make('category')
+                            ->label('Categoría')
+                            ->disabled(),
                         Forms\Components\TextInput::make('amount')
                             ->label('Monto')
                             ->disabled(),
@@ -115,7 +118,7 @@ class SaleResource extends Resource
                             ->default(1)
                             ->disabled(),
                     ])
-                    ->columns(5)
+                    ->columns(6)
                     ->columnSpanFull()
                     ->addable(false)
                     ->deletable(false)

@@ -9,6 +9,7 @@ use App\Models\Prize;
 use App\Models\PrizeBranch;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -21,6 +22,12 @@ class WhirlpoolPrizeRulesTest extends TestCase
     {
         parent::setUp();
         config(['services.dismac.secret_key' => 'test-api-key']);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_only_code_brand_2_and_unit_amount_greater_or_equal_to_100_participate(): void
@@ -215,6 +222,9 @@ class WhirlpoolPrizeRulesTest extends TestCase
 
     public function test_form_with_unit_amount_greater_than_2600_can_receive_higher_prizes(): void
     {
+        // Simulamos una fecha posterior a la restricción semanal (después del domingo 18 de octubre de 2026)
+        Carbon::setTestNow('2026-10-19 12:00:00');
+
         $branchEco = Branch::create([
             'id' => (string) Str::uuid(),
             'name' => 'Central Dismac',
@@ -358,6 +368,9 @@ class WhirlpoolPrizeRulesTest extends TestCase
     {
         $service = app(\App\Repositories\ParticipantService::class);
 
+        // Simulamos fecha posterior al 18 de octubre de 2026 para validar las reglas base completas
+        Carbon::setTestNow('2026-10-19 12:00:00');
+
         // Boundary 1: Exactamente 100
         $form100 = new Form();
         $item100 = new SaleItem(['amount' => 100, 'quantity' => 1]);
@@ -375,6 +388,13 @@ class WhirlpoolPrizeRulesTest extends TestCase
         $item2601 = new SaleItem(['amount' => 2601, 'quantity' => 1]);
         $form2601->setRelation('sale_item', $item2601);
         $this->assertEquals([100, 250, 500, 1000, 2000, 3000], $service->getAllowedPrizeValuesForForm($form2601));
+
+        // Ahora probamos durante la semana de restricción (hasta el domingo 18 inclusive)
+        Carbon::setTestNow('2026-10-15 12:00:00');
+        // Para <= 2600: sigue siendo [100, 250]
+        $this->assertEquals([100, 250], $service->getAllowedPrizeValuesForForm($form2600));
+        // Para > 2600: se restringe a [100, 250, 500] (se excluyen 1000, 2000, 3000)
+        $this->assertEquals([100, 250, 500], $service->getAllowedPrizeValuesForForm($form2601));
     }
 
     public function test_admin_validating_pending_informal_market_form_changes_status_to_registered_and_sets_user_id(): void
@@ -470,6 +490,203 @@ class WhirlpoolPrizeRulesTest extends TestCase
         $this->assertEquals($admin->id, $form->user_id);
         $this->assertNotNull($form->voucher_view_url);
         $this->assertStringContainsString($uploadResult['path'], $form->voucher_view_url);
+    }
+
+    public function test_excluded_categories_135_129_123_do_not_generate_attempts(): void
+    {
+        $payload = [
+            'name' => 'Test Cliente Repuestos',
+            'ci_number' => '77889900',
+            'document_type' => 'CI',
+            'cellphone' => '71122334',
+            'city' => 'Cochabamba',
+            'city_agency' => 'Cochabamba Central',
+            'sale_date' => '2026-10-12',
+            'control_code' => 'CTRL-CAT-EXCLUDE-001',
+            'business_unit' => 'ECO',
+            'sale_type' => 'CONTADO',
+            'total_amount' => 6900,
+            'sale_items' => [
+                // 1. Repuesto Whirlpool (categoría 135) - monto unitario 1500 -> EXCLUIDO (0 intentos)
+                [
+                    'code_brand' => 2,
+                    'category' => 135,
+                    'name' => 'Repuesto Motor Lavadora Whirlpool',
+                    'quantity' => 1,
+                    'amount' => 1500,
+                ],
+                // 2. Componente Whirlpool (categoría 129) - monto unitario 800 -> EXCLUIDO (0 intentos)
+                [
+                    'code_brand' => 2,
+                    'category' => 129,
+                    'name' => 'Componente Válvula Whirlpool',
+                    'quantity' => 1,
+                    'amount' => 800,
+                ],
+                // 3. Repuesto Whirlpool (categoría 123) - monto unitario 600 -> EXCLUIDO (0 intentos)
+                [
+                    'code_brand' => 2,
+                    'category' => 123,
+                    'name' => 'Repuesto Manguera Whirlpool',
+                    'quantity' => 1,
+                    'amount' => 600,
+                ],
+                // 4. Electrodoméstico Whirlpool (categoría 50 o válida) - 1 unidad monto 4000 -> 1 intento
+                [
+                    'code_brand' => 2,
+                    'category' => 50,
+                    'name' => 'Refrigerador Whirlpool Inverter',
+                    'quantity' => 1,
+                    'amount' => 4000,
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/register-participant', $payload, [
+            'X-API-KEY' => 'test-api-key',
+        ]);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        // Solo el refrigerador (categoría 50) debe generar intento (1 intento)
+        $this->assertEquals(1, $data['total_attempts']);
+        $this->assertStringContainsString('1 intento(s)', $data['message_promotion']);
+
+        // Solo 1 formulario en base de datos
+        $forms = Form::where('ci_number', '77889900')->get();
+        $this->assertCount(1, $forms);
+
+        // El formulario debe estar asociado al ítem de categoría 50
+        $refrigeradorItem = SaleItem::where('name', 'Refrigerador Whirlpool Inverter')->first();
+        $this->assertNotNull($refrigeradorItem);
+        $this->assertEquals($refrigeradorItem->id, $forms->first()->sale_item_id);
+
+        // Los ítems de repuestos deben haberse guardado en sale_items pero no en valid_sale_items
+        $sale = Sale::where('control_code', 'CTRL-CAT-EXCLUDE-001')->first();
+        $this->assertCount(4, $sale->sale_items);
+        $this->assertCount(1, $sale->valid_sale_items);
+    }
+
+    public function test_sale_with_only_excluded_categories_generates_zero_attempts(): void
+    {
+        $payload = [
+            'name' => 'Test Solo Repuestos',
+            'ci_number' => '11992288',
+            'document_type' => 'CI',
+            'cellphone' => '79988776',
+            'city' => 'Santa Cruz',
+            'city_agency' => 'Santa Cruz Norte',
+            'sale_date' => '2026-10-12',
+            'control_code' => 'CTRL-CAT-EXCLUDE-002',
+            'business_unit' => 'ECO',
+            'sale_type' => 'CONTADO',
+            'total_amount' => 2900,
+            'sale_items' => [
+                [
+                    'code_brand' => 2,
+                    'category' => '135', // enviado como string
+                    'name' => 'Repuesto Bomba',
+                    'quantity' => 1,
+                    'amount' => 1500,
+                ],
+                [
+                    'code_brand' => 2,
+                    'category' => 129,
+                    'name' => 'Componente Tarjeta Electrónica',
+                    'quantity' => 1,
+                    'amount' => 1400,
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/register-participant', $payload, [
+            'X-API-KEY' => 'test-api-key',
+        ]);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        $this->assertEquals(0, $data['total_attempts']);
+        $this->assertEquals('¡Gracias por su participación!', $data['message_promotion']);
+
+        $forms = Form::where('ci_number', '11992288')->get();
+        $this->assertCount(0, $forms);
+    }
+
+    public function test_weekly_restriction_until_sunday_18_limits_prizes_to_100_250_and_500(): void
+    {
+        // Forzamos fecha durante la semana restringida (ej. jueves 15 de octubre de 2026)
+        Carbon::setTestNow('2026-10-15 15:00:00');
+
+        $branchEco = Branch::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Central Dismac',
+            'channel' => 'ECOMMERCE',
+            'city' => 'Santa Cruz',
+        ]);
+
+        // Crear premios de 500 y 1000
+        $prize500 = Prize::create(['id' => (string) Str::uuid(), 'name' => 'Premio 500 Bs', 'amount' => 500, 'active' => true]);
+        $prize1000 = Prize::create(['id' => (string) Str::uuid(), 'name' => 'Premio 1000 Bs', 'amount' => 1000, 'active' => true]);
+
+        foreach ([$prize500, $prize1000] as $prize) {
+            PrizeBranch::create([
+                'id' => (string) Str::uuid(),
+                'prize_id' => $prize->id,
+                'branch_id' => $branchEco->id,
+                'stock' => 10,
+            ]);
+
+            Code::create([
+                'id' => (string) Str::uuid(),
+                'prize_id' => $prize->id,
+                'code' => "CUPON-{$prize->amount}-WEEKLY",
+                'product_code' => "TC{$prize->amount}S",
+                'value' => $prize->amount,
+                'status' => 'available',
+                'is_used' => false,
+            ]);
+        }
+
+        $sale = Sale::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cliente Semana Especial',
+            'sale_type' => 'CONTADO',
+            'total_amount' => 4000,
+        ]);
+
+        $item = SaleItem::create([
+            'id' => (string) Str::uuid(),
+            'sale_id' => $sale->id,
+            'name' => 'Cocina Whirlpool',
+            'code_brand' => 2,
+            'amount' => 4000, // unit amount = 4000 (> 2600)
+            'quantity' => 1,
+        ]);
+
+        $form = Form::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cliente Semana Especial',
+            'ci_number' => '33445566',
+            'control_code' => 'CTRL-WEEKLY-LIMIT',
+            'status' => 'registered',
+            'type' => 'dismac',
+            'sale_id' => $sale->id,
+            'sale_item_id' => $item->id,
+        ]);
+
+        $response = $this->postJson('/api/mark-as-used', [
+            'id' => $form->id,
+            'control_code' => 'CTRL-WEEKLY-LIMIT',
+        ]);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        // Durante esta semana solo debe poder salir 500, NO el de 1000
+        $assignedValue = (float) $data['assigned_code']['value'];
+        $this->assertEquals(500.0, $assignedValue);
     }
 }
 

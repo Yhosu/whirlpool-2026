@@ -18,7 +18,10 @@ final class SaleItem extends Model
 
     protected $keyType = 'string';
 
-    protected $casts = ['id' => 'string'];
+    protected $casts = [
+        'id' => 'string',
+        'category' => 'integer',
+    ];
 
     protected $with = [];
 
@@ -39,6 +42,7 @@ final class SaleItem extends Model
         'code_brand',
         'name_brand',
         'quantity',
+        'category',
     ];
 
     public $timestamps = true;
