@@ -205,59 +205,59 @@ class PrizeStockHistoryResource extends Resource
                 Tables\Actions\ViewAction::make()->slideOver(),
             ])
             ->headerActions([
-                Action::make('add_stock')
-                    ->label('Ajustar / Agregar Stock')
-                    ->icon('heroicon-o-plus-circle')
-                    ->color('primary')
-                    ->slideOver()
-                    ->form([
-                        Select::make('prize_id')
-                            ->label('Premio')
-                            ->options(Prize::orderBy('amount', 'asc')->pluck('name', 'id'))
-                            ->required()
-                            ->searchable()
-                            ->preload(),
-                        Select::make('branch_id')
-                            ->label('Sucursal')
-                            ->options(Branch::all()->mapWithKeys(fn ($b) => [$b->id => "{$b->name} ({$b->channel}) - {$b->city}"]))
-                            ->required()
-                            ->searchable()
-                            ->preload(),
-                        Select::make('type')
-                            ->label('Tipo de Movimiento')
-                            ->options([
-                                'addition' => 'Adición (Aumentar Stock)',
-                                'subtraction' => 'Sustracción (Disminuir Stock)',
-                            ])
-                            ->default('addition')
-                            ->required(),
-                        TextInput::make('quantity')
-                            ->label('Cantidad')
-                            ->numeric()
-                            ->minValue(1)
-                            ->default(1)
-                            ->required(),
-                        Textarea::make('description')
-                            ->label('Motivo / Observación')
-                            ->placeholder('Ej: Ingreso de nuevo lote promocional')
-                            ->required(),
-                    ])
-                    ->action(function (array $data) {
-                        PrizeStockHistory::create([
-                            'prize_id' => $data['prize_id'],
-                            'branch_id' => $data['branch_id'],
-                            'quantity' => (int) $data['quantity'],
-                            'type' => $data['type'],
-                            'user_id' => auth()->id(),
-                            'description' => $data['description'],
-                        ]);
+                // Action::make('add_stock')
+                //     ->label('Ajustar / Agregar Stock')
+                //     ->icon('heroicon-o-plus-circle')
+                //     ->color('primary')
+                //     ->slideOver()
+                //     ->form([
+                //         Select::make('prize_id')
+                //             ->label('Premio')
+                //             ->options(Prize::orderBy('amount', 'asc')->pluck('name', 'id'))
+                //             ->required()
+                //             ->searchable()
+                //             ->preload(),
+                //         Select::make('branch_id')
+                //             ->label('Sucursal')
+                //             ->options(Branch::all()->mapWithKeys(fn ($b) => [$b->id => "{$b->name} ({$b->channel}) - {$b->city}"]))
+                //             ->required()
+                //             ->searchable()
+                //             ->preload(),
+                //         Select::make('type')
+                //             ->label('Tipo de Movimiento')
+                //             ->options([
+                //                 'addition' => 'Adición (Aumentar Stock)',
+                //                 'subtraction' => 'Sustracción (Disminuir Stock)',
+                //             ])
+                //             ->default('addition')
+                //             ->required(),
+                //         TextInput::make('quantity')
+                //             ->label('Cantidad')
+                //             ->numeric()
+                //             ->minValue(1)
+                //             ->default(1)
+                //             ->required(),
+                //         Textarea::make('description')
+                //             ->label('Motivo / Observación')
+                //             ->placeholder('Ej: Ingreso de nuevo lote promocional')
+                //             ->required(),
+                //     ])
+                //     ->action(function (array $data) {
+                //         PrizeStockHistory::create([
+                //             'prize_id' => $data['prize_id'],
+                //             'branch_id' => $data['branch_id'],
+                //             'quantity' => (int) $data['quantity'],
+                //             'type' => $data['type'],
+                //             'user_id' => auth()->id(),
+                //             'description' => $data['description'],
+                //         ]);
 
-                        Notification::make()
-                            ->title('Movimiento de Stock Registrado')
-                            ->body('El inventario ha sido actualizado correctamente.')
-                            ->success()
-                            ->send();
-                    }),
+                //         Notification::make()
+                //             ->title('Movimiento de Stock Registrado')
+                //             ->body('El inventario ha sido actualizado correctamente.')
+                //             ->success()
+                //             ->send();
+                //     }),
                 Action::make('export')
                     ->label('Exportar Excel')
                     ->icon('heroicon-o-arrow-down-tray')

@@ -22,6 +22,8 @@ class MundialSaleResource extends Resource
 
     protected static ?string $navigationGroup = 'EL MUNDIAL SE VIVE EN CASA';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationLabel = 'Ventas con cupones';
 
     protected static ?string $modelLabel = 'Venta con cupones';

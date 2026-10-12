@@ -49,6 +49,7 @@ class BranchesTable extends Component implements HasForms, HasTable
                         'Montero' => 'Montero',
                         'Santa Cruz' => 'Santa Cruz',
                         'Tarija' => 'Tarija',
+                        'Nacional' => 'Nacional',
                     ])
                     ->multiple(),
                 SelectFilter::make('channel')
@@ -80,6 +81,7 @@ class BranchesTable extends Component implements HasForms, HasTable
                                 'Montero' => 'Montero',
                                 'Santa Cruz' => 'Santa Cruz',
                                 'Tarija' => 'Tarija',
+                                'Nacional' => 'Nacional',
                             ]),
                         Select::make('channel')
                             ->label('Canal')
@@ -114,6 +116,7 @@ class BranchesTable extends Component implements HasForms, HasTable
                                 'Montero' => 'Montero',
                                 'Santa Cruz' => 'Santa Cruz',
                                 'Tarija' => 'Tarija',
+                                'Nacional' => 'Nacional',
                             ]),
                         Select::make('channel')
                             ->label('Canal')

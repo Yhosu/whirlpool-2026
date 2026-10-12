@@ -49,6 +49,7 @@
                             <option value="Pando">Pando</option>
                             <option value="Sucre">Sucre</option>
                             <option value="Oruro">Oruro</option>
+                            <option value="Nacional">Nacional</option>
                         </select>
                     </div>
                     <div class="form-control">

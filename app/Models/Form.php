@@ -97,6 +97,16 @@ final class Form extends Model
         return $this->belongsTo(Code::class, 'code_id');
     }
 
+    public function assigned_code(): BelongsTo
+    {
+        return $this->belongsTo(Code::class, 'code_id');
+    }
+
+    public function codeRelation(): BelongsTo
+    {
+        return $this->belongsTo(Code::class, 'code_id');
+    }
+
     public function getUnitAmountAttribute(): ?float
     {
         if ($this->sale_item) {

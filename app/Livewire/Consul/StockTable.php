@@ -74,6 +74,7 @@ class StockTable extends Component implements HasForms, HasTable
                         'Montero' => 'Montero',
                         'Santa Cruz' => 'Santa Cruz',
                         'Tarija' => 'Tarija',
+                        'Nacional' => 'Nacional',
                     ])
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'], fn ($query, $value) => $query->whereHas('branch', fn ($query) => $query->where('city', $value))
                     )

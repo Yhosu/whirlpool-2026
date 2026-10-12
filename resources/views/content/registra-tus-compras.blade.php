@@ -100,6 +100,7 @@
                             <option value="Santa Cruz" {{ old('city') == 'Santa Cruz' ? 'selected' : '' }}>Santa Cruz
                             </option>
                             <option value="Tarija" {{ old('city') == 'Tarija' ? 'selected' : '' }}>Tarija</option>
+                            <option value="Nacional" {{ old('city') == 'Nacional' ? 'selected' : '' }}>Nacional</option>
                         </select>
                     </div>
 

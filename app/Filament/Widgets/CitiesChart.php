@@ -2,7 +2,7 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Participant;
+use App\Models\Form as FormModel;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Carbon;
@@ -12,20 +12,20 @@ class CitiesChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Ciudades de Participantes';
+    protected static ?string $heading = 'Formularios por Ciudad';
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 4;
 
     public static function canView(): bool
     {
-        return auth()->user()->isAdmin();
+        return auth()->user()->isAdmin() || auth()->user()->isSubadmin();
     }
 
-    protected static ?string $pollingInterval = null; // para que no se actualice automaticamente
+    protected static ?string $pollingInterval = null;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 1;
 
-    protected static ?string $maxHeight = '300px';
+    protected static ?string $maxHeight = '280px';
 
     protected function getData(): array
     {
@@ -35,28 +35,33 @@ class CitiesChart extends ChartWidget
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
 
-        $data = Participant::select('city', DB::raw('count(*) as total'))
+        $data = FormModel::select('city', DB::raw('count(*) as total'))
             ->whereBetween('created_at', [$start, $end])
             ->whereNotNull('city')
+            ->where('city', '!=', '')
             ->groupBy('city')
+            ->orderByDesc('total')
             ->get();
+
+        $labels = $data->pluck('city')->toArray();
+        $totals = $data->pluck('total')->toArray();
 
         return [
             'datasets' => [
                 [
-                    'label' => 'Participantes por Ciudad',
-                    'data' => $data->pluck('total')->toArray(),
+                    'label' => 'Formularios por Ciudad',
+                    'data' => $totals,
                     'backgroundColor' => [
-                        '#E22319', '#34d399', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1',
+                        '#E22319', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b',
                     ],
                 ],
             ],
-            'labels' => $data->pluck('city')->toArray(),
+            'labels' => $labels,
         ];
     }
 
     protected function getType(): string
     {
-        return 'pie';
+        return 'doughnut';
     }
 }

@@ -33,7 +33,7 @@ class ParticipantResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()->isAdmin();
+        return auth()->user()->isAdmin() || auth()->user()->isSubadmin();
     }
 
     public static function form(Form $form): Form
@@ -161,6 +161,7 @@ class ParticipantResource extends Resource
                         'Montero' => 'Montero',
                         'Santa Cruz' => 'Santa Cruz',
                         'Tarija' => 'Tarija',
+                        'Nacional' => 'Nacional',
                     ]),
                 Tables\Filters\SelectFilter::make('document_type')
                     ->label('Tipo de Documento')

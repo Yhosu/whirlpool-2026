@@ -56,6 +56,7 @@ return [
         'Montero' => 'Montero',
         'Santa Cruz' => 'Santa Cruz',
         'Tarija' => 'Tarija',
+        'Nacional' => 'Nacional',
         'exchanged' => 'Canjeado',
         'created' => 'Creado',
         'Beni' => 'Beni',

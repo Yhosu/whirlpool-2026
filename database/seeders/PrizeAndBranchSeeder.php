@@ -20,9 +20,11 @@ class PrizeAndBranchSeeder extends Seeder
                 'id' => (string) Str::uuid(),
                 'name' => 'Central Dismac',
                 'channel' => 'ECOMMERCE',
-                'city' => 'Santa Cruz',
+                'city' => 'Nacional',
                 'address' => 'Central Dismac',
             ]);
+        } else {
+            $centralDismac->update(['city' => 'Nacional']);
         }
 
         $cashbackMayoristas = Branch::where('channel', 'MAYORISTA')->first();
@@ -31,9 +33,11 @@ class PrizeAndBranchSeeder extends Seeder
                 'id' => (string) Str::uuid(),
                 'name' => 'CashBack Mayoristas',
                 'channel' => 'MAYORISTA',
-                'city' => 'Santa Cruz',
+                'city' => 'Nacional',
                 'address' => 'CashBack Mayoristas',
             ]);
+        } else {
+            $cashbackMayoristas->update(['city' => 'Nacional']);
         }
 
         // 2. Definición de Premios y Stocks

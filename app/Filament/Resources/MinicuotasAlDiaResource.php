@@ -21,6 +21,8 @@ class MinicuotasAlDiaResource extends Resource
 
     protected static ?string $navigationGroup = 'EL MUNDIAL SE VIVE EN CASA';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationLabel = 'Clientes minicuotas al dia';
 
     protected static ?string $modelLabel = 'Cliente minicuotas al dia';

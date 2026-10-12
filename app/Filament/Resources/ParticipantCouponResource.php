@@ -32,7 +32,7 @@ class ParticipantCouponResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()->isAdmin();
+        return auth()->user()->isAdmin() || auth()->user()->isSubadmin();
     }
 
     public static function form(Form $form): Form
@@ -91,7 +91,7 @@ class ParticipantCouponResource extends Resource
                     ->prefix('Ciudad: '),
                 Tables\Columns\TextColumn::make('prize.name')
                     ->label('Premio')
-                    ->prefix('Premio: '),
+                    ->formatStateUsing(fn ($state) => $state ? (preg_match('/^premio\b/i', trim($state)) ? trim($state) : "Premio: {$state}") : '-'),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->prefix('Estado: ')

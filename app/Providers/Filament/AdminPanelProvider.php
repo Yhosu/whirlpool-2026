@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -24,16 +25,20 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(Login::class)
+            ->darkMode(condition: true, isForced: true)
             ->colors([
-                'primary' => Color::hex('#E22319'), // Replace with your hex code
+                'primary' => Color::hex('#E22319'), // Whirlpool Red
+                'purple' => Color::Purple,
+                'violet' => Color::Violet,
             ])
             ->sidebarCollapsibleOnDesktop()
             ->brandName('Whirlpool Special Days - Dismac')
             ->brandLogoHeight('3rem')
             ->favicon('assets/img/logo.png')
-            ->brandLogo(fn (): string => (string) asset('assets/img/logo.png'))
+            ->brandLogo(fn (): string => (string) asset('assets/logo.png'))
             ->databaseNotifications()
+            ->databaseNotificationsPolling(null)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([

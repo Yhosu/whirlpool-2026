@@ -45,6 +45,7 @@ class BranchResource extends Resource
                         'Montero' => 'Montero',
                         'Santa Cruz' => 'Santa Cruz',
                         'Tarija' => 'Tarija',
+                        'Nacional' => 'Nacional',
                     ]),
                 Forms\Components\Select::make('channel')
                     ->label('Canal')

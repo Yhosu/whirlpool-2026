@@ -3,9 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\FormResource;
-use App\Models\Participant;
-use App\Models\ParticipantCoupon;
-use App\Models\Sale;
+use App\Models\Form as FormModel;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Grid;
@@ -18,31 +16,30 @@ use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
 use Rap2hpoutre\FastExcel\FastExcel;
-use Rap2hpoutre\FastExcel\SheetCollection;
 
 class Dashboard extends BaseDashboard
 {
-    protected static ?string $title = 'Dashboard Hisense/Toshiba';
+    protected static ?string $title = 'Dashboard Whirlpool';
 
-    protected static ?string $navigationLabel = 'Dashboard Hisense/Toshiba';
+    protected static ?string $navigationLabel = 'Dashboard';
 
     use HasFiltersForm;
 
     public static function canAccess(): bool
     {
-        return true; // Permitimos acceso para evitar el 403
+        return true;
     }
 
     public function mount(): void
     {
-        if (! auth()->user()->isAdmin()) {
+        if (! (auth()->user()->isAdmin() || auth()->user()->isSubadmin())) {
             redirect(FormResource::getUrl());
         }
     }
 
     public function filtersForm(Form $form): Form
     {
-        if (! auth()->user()->isAdmin()) {
+        if (! (auth()->user()->isAdmin() || auth()->user()->isSubadmin())) {
             return $form->schema([]);
         }
 
@@ -56,12 +53,26 @@ class Dashboard extends BaseDashboard
                                 $start = $get('startDate') ? Carbon::parse($get('startDate'))->startOfDay() : now()->startOfDay();
                                 $end = $get('endDate') ? Carbon::parse($get('endDate'))->endOfDay() : now()->endOfDay();
 
-                                $totalParticipants = Participant::whereIn('id', Sale::whereBetween('created_at', [$start, $end])->whereHas('valid_sale_items')->select('participant_id'))
-                                    ->count();
+                                $query = FormModel::whereBetween('created_at', [$start, $end]);
+                                $totalForms = (clone $query)->count();
+                                $withPrize = (clone $query)->whereNotNull('prize_id')->count();
+                                $delivered = (clone $query)->whereIn('status', ['delivered', 'used'])->count();
+                                $pending = (clone $query)->whereIn('status', ['registered', 'pending'])->count();
+                                $uniqueClients = (clone $query)->whereNotNull('ci_number')->distinct('ci_number')->count('ci_number');
 
-                                $totalCoupons = ParticipantCoupon::whereBetween('created_at', [$start, $end])->count();
-
-                                return new HtmlString("<div style='text-align: center; font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem;'>Rango Seleccionado - Participantes con Ventas Válidas: {$totalParticipants} | Cupones: {$totalCoupons}</div>");
+                                return new HtmlString("
+                                    <div class='flex flex-wrap items-center justify-center gap-4 text-center py-1 text-sm font-semibold text-gray-700 dark:text-gray-200'>
+                                        <div>Total Formularios: <span class='text-primary-600 font-bold text-base'>{$totalForms}</span></div>
+                                        <span class='text-gray-400 font-normal'>|</span>
+                                        <div>Premios Asignados: <span class='text-emerald-600 font-bold text-base'>{$withPrize}</span></div>
+                                        <span class='text-gray-400 font-normal'>|</span>
+                                        <div>Canjeados / Entregados: <span class='text-emerald-600 font-bold text-base'>{$delivered}</span></div>
+                                        <span class='text-gray-400 font-normal'>|</span>
+                                        <div>Pendientes: <span class='text-amber-600 font-bold text-base'>{$pending}</span></div>
+                                        <span class='text-gray-400 font-normal'>|</span>
+                                        <div>Clientes Únicos (CI): <span class='text-blue-600 font-bold text-base'>{$uniqueClients}</span></div>
+                                    </div>
+                                ");
                             }),
 
                         Grid::make(2)
@@ -81,13 +92,13 @@ class Dashboard extends BaseDashboard
 
     protected function getHeaderActions(): array
     {
-        if (! auth()->user()->isAdmin()) {
+        if (! (auth()->user()->isAdmin() || auth()->user()->isSubadmin())) {
             return [];
         }
 
         return [
             Action::make('downloadReport')
-                ->label('Descargar Reporte')
+                ->label('Descargar Reporte Formularios')
                 ->icon('heroicon-o-document-arrow-down')
                 ->action(function () {
                     $startDate = $this->filters['startDate'] ?? now()->startOfDay();
@@ -96,56 +107,42 @@ class Dashboard extends BaseDashboard
                     $start = Carbon::parse($startDate)->startOfDay();
                     $end = Carbon::parse($endDate)->endOfDay();
 
-                    $participants = Participant::whereIn('id', Sale::whereBetween('created_at', [$start, $end])->whereHas('valid_sale_items')->select('participant_id'))
-                        ->get()->map(function ($p) {
-
+                    $forms = FormModel::with(['prize', 'branch', 'user'])
+                        ->whereBetween('created_at', [$start, $end])
+                        ->get()
+                        ->map(function ($f) {
                             return [
-                                'ID' => $p->id,
-                                'Nombre' => $p->name,
-                                'CI' => $p->ci_number,
-                                'Celular' => $p->cellphone,
-                                'Ciudad' => $p->city,
-                                'Estado' => $p->status,
-                                'Registrado' => $p->created_at->format('Y-m-d H:i:s'),
+                                'ID' => $f->id,
+                                'Código Cupón' => $f->code,
+                                'Cliente' => $f->name,
+                                'CI' => $f->ci_number,
+                                'Teléfono' => $f->cellphone,
+                                'Ciudad' => $f->city,
+                                'Canal / Tipo' => match ($f->type) {
+                                    'dismac' => 'Dismac',
+                                    'informal-market' => 'Mercado Informal',
+                                    default => $f->type ?? '-',
+                                },
+                                'Estado' => match ($f->status) {
+                                    'registered' => 'Registrado',
+                                    'pending' => 'Pendiente',
+                                    'used' => 'Utilizado / Girado',
+                                    'delivered' => 'Entregado',
+                                    'invalidated' => 'Invalidado',
+                                    default => $f->status,
+                                },
+                                'Premio' => $f->prize?->name ?? 'Sin premio',
+                                'Sucursal' => $f->branch?->name ?? 'No asignada',
+                                'Ruleta Girada' => $f->is_scratched ? 'Sí' : 'No',
+                                'URL Factura' => $f->invoice_view_url ?? '',
+                                'Comprobante Voucher' => $f->voucher_view_url ?? '',
+                                'Razón Invalidación' => $f->invalidation_reason ?? '',
+                                'Observaciones' => $f->observations ?? '',
+                                'Fecha Registro' => $f->created_at?->format('Y-m-d H:i:s'),
                             ];
                         });
 
-                    $coupons = ParticipantCoupon::with(['participant', 'sale'])
-                        ->whereBetween('created_at', [$start, $end])->get()->map(function ($c) {
-                            return [
-                                'Código' => $c->code,
-                                'Participante' => $c->participant?->name,
-                                'Factura' => $c->sale?->invoice_number,
-                                'UDN' => $c->business_unit,
-                                'Estado' => $c->status,
-                                'Registrado' => $c->created_at->format('Y-m-d H:i:s'),
-                            ];
-                        });
-
-                    $sales = Sale::with('participant')->whereBetween('created_at', [$start, $end])->whereHas('valid_sale_items')->get()->map(function ($s) {
-                        return [
-                            'Nombre' => $s->name,
-                            'CI' => $s->participant?->ci_number,
-                            'Teléfono' => $s->participant?->cellphone,
-                            'Tipo Venta' => $s->sale_type,
-                            'Total' => $s->total_amount,
-                            'Items' => $s->quantity_items,
-                            'Factura N°' => $s->invoice_number,
-                            'Agencia' => $s->city_agency,
-                            'Código Control' => $s->control_code,
-                            'URL Factura' => $s->invoice_url,
-                            'Registrado' => $s->created_at->format('Y-m-d H:i:s'),
-                            'Enlace Directo' => url('/admin/sales?tableAction=edit&tableActionRecord='.$s->id),
-                        ];
-                    });
-
-                    $sheets = new SheetCollection([
-                        'participantes' => $participants,
-                        'cupones' => $coupons,
-                        'ventas' => $sales,
-                    ]);
-
-                    return (new FastExcel($sheets))->download('Reporte_Dismac_'.now()->format('Ymd_His').'.xlsx');
+                    return (new FastExcel($forms))->download('Reporte_Whirlpool_Formularios_'.now()->format('Ymd_His').'.xlsx');
                 }),
         ];
     }

@@ -133,63 +133,75 @@ class SaleResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Cliente / Participante')
+                    ->icon('heroicon-m-user')
                     ->searchable()
                     ->sortable()
                     ->weight('medium'),
                 Tables\Columns\TextColumn::make('control_code')
                     ->label('Código Control')
+                    ->icon('heroicon-m-qr-code')
                     ->searchable()
                     ->copyable()
                     ->fontFamily('mono'),
                 Tables\Columns\TextColumn::make('quantity_items')
                     ->label('Items')
+                    ->icon('heroicon-m-shopping-cart')
                     ->numeric()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('total_amount')
                     ->label('Total (Bs.)')
+                    ->icon('heroicon-m-banknotes')
                     ->numeric(decimalPlaces: 2)
                     ->sortable(),
                 Tables\Columns\TextColumn::make('forms_count')
-                    ->label('Intentos')
+                    ->label('Formularios')
+                    ->icon('heroicon-m-document-duplicate')
                     ->counts('forms')
                     ->badge()
                     ->color('primary')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('sale_type')
                     ->label('Tipo Venta')
+                    ->icon('heroicon-m-credit-card')
                     ->badge()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('business_unit')
                     ->label('Canal')
+                    ->icon('heroicon-m-building-storefront')
                     ->badge(),
                 Tables\Columns\IconColumn::make('active')
                     ->label('Válido')
                     ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Fecha Registro')
+                    ->icon('heroicon-m-calendar')
                     ->dateTime('d/m/Y H:i')
                     ->sortable(),
                 Tables\Columns\Layout\Panel::make([
-                    Tables\Columns\Layout\Split::make([
+                    Tables\Columns\Layout\Stack::make([
                         Tables\Columns\TextColumn::make('invoice_number')
                             ->label('Factura N°')
-                            ->prefix('Factura N°: ')
+                            ->icon('heroicon-m-receipt-percent')
+                            ->formatStateUsing(fn ($state) => "Factura N°: {$state}")
                             ->sortable(),
                         Tables\Columns\TextColumn::make('city_agency')
-                            ->label('Agencia')
-                            ->prefix('Agencia: ')
+                            ->label('Agencia / Ciudad')
+                            ->icon('heroicon-m-map-pin')
+                            ->formatStateUsing(fn ($state) => "Agencia / Ciudad: {$state}")
                             ->searchable(),
                         Tables\Columns\TextColumn::make('sale_date')
                             ->label('Fecha Venta')
-                            ->prefix('Fecha Venta: ')
+                            ->icon('heroicon-m-clock')
+                            ->formatStateUsing(fn ($state) => "Fecha Venta: {$state}")
                             ->searchable(),
                         Tables\Columns\TextColumn::make('invoice_url')
                             ->label('Factura SIAT')
+                            ->icon('heroicon-m-document-text')
                             ->formatStateUsing(fn ($state) => $state ? '📄 Ver Factura SIAT (URL)' : 'Sin Factura URL')
                             ->color(fn ($state) => $state ? 'info' : 'gray')
                             ->url(fn (Model $record) => $record->invoice_url)
                             ->openUrlInNewTab(),
-                    ]),
+                    ])->space(2),
                 ])->collapsible(),
             ])
             ->defaultSort('created_at', 'desc')
@@ -262,7 +274,8 @@ class SaleResource extends Resource
                     ->slideOver(),
                 Tables\Actions\EditAction::make()
                     ->label('Editar')
-                    ->slideOver(),
+                    ->slideOver()
+                    ->visible(fn () => auth()->user()?->isAdmin() ?? false),
             ])
             ->headerActions([
                 Tables\Actions\Action::make('export')
@@ -319,7 +332,7 @@ class SaleResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return true;
+        return auth()->user()?->isAdmin() ?? false;
     }
 
     public static function canDelete(Model $record): bool
