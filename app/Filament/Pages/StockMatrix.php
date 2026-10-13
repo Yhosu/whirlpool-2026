@@ -30,6 +30,11 @@ class StockMatrix extends Page
 
     protected static string $view = 'filament.pages.stock-matrix';
 
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->isAdmin() || auth()->user()?->isSubadmin();
+    }
+
     protected function getHeaderActions(): array
     {
         return [

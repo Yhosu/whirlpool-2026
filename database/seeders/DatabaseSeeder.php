@@ -28,6 +28,24 @@ class DatabaseSeeder extends Seeder
         );
 
         User::updateOrCreate(
+            ['email' => 'admin2@dismac.com.bo'],
+            [
+                'name' => 'Admin 2',
+                'password' => Hash::make('1q2w3e4r'),
+                'role' => 'admin',
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'subadmin@dismac.com.bo'],
+            [
+                'name' => 'Subadmin Validador',
+                'password' => Hash::make('1q2w3e4r'),
+                'role' => 'subadmin',
+            ]
+        );
+
+        User::updateOrCreate(
             ['email' => 'consul@dismac.com.bo'],
             [
                 'name' => 'Subadmin Consul',
