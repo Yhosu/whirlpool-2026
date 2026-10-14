@@ -84,8 +84,8 @@ class DailyReportService
             'CI                          ' => $form->ci_number,
             'Teléfono                    ' => $form->cellphone,
             'Ciudad                      ' => $form->city,
-            'Código Cupón                ' => $form->code,
-            'Cupón Asignado              ' => optional($form->assignedCode)->code ?? '',
+            'Código Mercado Informal     ' => $form->code,
+            'Voucher Asignado            ' => optional($form->assignedCode)->code ?? '',
             'Premio                      ' => optional($form->prize)->name ?? 'S/P',
             'Unidad de Negocio           ' => $form->business_unit,
             'Tipo de Registro            ' => match ($form->type) {
