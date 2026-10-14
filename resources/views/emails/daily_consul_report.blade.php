@@ -24,9 +24,9 @@
                                 style="height: auto; max-height: 140px; display: block; margin-bottom: 15px;">
                             <h1
                                 style="color: #111827; font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">
-                                Reporte Diario Consul</h1>
+                                {{ $emailTitle ?? 'Reporte Diario Consul' }}</h1>
                             <p style="color: #6b7280; font-size: 15px; margin: 8px 0 0 0; font-weight: 500;">
-                                PROMO CONSUL
+                                {{ $emailSubtitle ?? 'PROMO CONSUL' }}
                             </p>
                         </td>
                     </tr>
@@ -37,7 +37,7 @@
                             <p style="color: #374151; font-size: 16px; line-height: 24px; margin: 0 0 20px 0;">Hola
                                 Equipo,</p>
                             <p style="color: #4b5563; font-size: 15px; line-height: 24px; margin: 0 0 30px 0;">
-                                Adjunto encontrarán el reporte de gestión diario de **Consul** correspondiente al siguiente periodo:
+                                Adjunto encontrarán el reporte de gestión diario {{ $emailContext ?? 'de **Consul**' }} correspondiente al siguiente periodo:
                             </p>
 
                             <!-- Date Range Card -->

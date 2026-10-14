@@ -13,6 +13,13 @@ return [
         'coranivico@gmail.com',
         'Hernan@gooncomunicacion.com',
     ],
+    'recipients_daily' => [
+        'josuandroidg7@gmail.com',
+        'hernan@gooncomunicacion.com', 
+        'christian@gooncomunicacion.com',
+        'sortega@dismac.com.bo'
+        // 'Hernan@gooncomunicacion.com',
+    ],
     'range' => [
         'start' => 'last week sunday',
         'end' => 'this week sunday',
