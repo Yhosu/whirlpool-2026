@@ -376,7 +376,25 @@ class ParticipantService implements ParticipantServiceInteface
                 ->lockForUpdate()
                 ->first();
 
-            if (! $availableCode || ! $availableCode->prize) {
+            if (! $availableCode) {
+                return [
+                    'success' => false,
+                    'message' => 'No hay stock disponible.',
+                    'branch_id' => $branch->id,
+                    'prize_id' => null,
+                    'code_id' => null,
+                ];
+            }
+
+            // Blindaje de seguridad: Garantizar que el premio asociado corresponda exactamente al valor monetario del cupón
+            $correctPrize = Prize::where('amount', $availableCode->value)->first();
+            if ($correctPrize && ($availableCode->prize_id !== $correctPrize->id || ! $availableCode->prize)) {
+                $availableCode->prize_id = $correctPrize->id;
+                $availableCode->save();
+                $availableCode->setRelation('prize', $correctPrize);
+            }
+
+            if (! $availableCode->prize) {
                 return [
                     'success' => false,
                     'message' => 'No hay stock disponible.',

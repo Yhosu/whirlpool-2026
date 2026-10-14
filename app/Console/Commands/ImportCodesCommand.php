@@ -62,7 +62,7 @@ class ImportCodesCommand extends Command
 
                 $value = (float) ($row['Valor'] ?? 0);
                 $prize = $prizes->first(function ($p) use ($value) {
-                    return (float) $p->amount === $value || str_contains($p->name, (string) (int) $value);
+                    return (float) $p->amount === $value;
                 });
 
                 $expirationDate = $this->parseSpanishDate($row['FechaVencimiento'] ?? null);
@@ -86,6 +86,12 @@ class ImportCodesCommand extends Command
                     $totalImported++;
                     $fileCount++;
                 } else {
+                    if ($prize && $codeRecord->prize_id !== $prize->id && ! $codeRecord->is_used) {
+                        $codeRecord->update([
+                            'prize_id' => $prize->id,
+                            'value' => $value,
+                        ]);
+                    }
                     $totalSkipped++;
                 }
             }
