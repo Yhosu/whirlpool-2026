@@ -25,6 +25,10 @@ use Illuminate\Support\Facades\Log;
 
 class ParticipantService implements ParticipantServiceInteface
 {
+    private array $mayorista3000CiAllowlist = [
+        // Add the three authorized CI numbers here.
+    ];
+
     protected $defaultPriceEcoId;
 
     protected $defaultPriceRetId;
@@ -268,6 +272,7 @@ class ParticipantService implements ParticipantServiceInteface
      * - Monto unitario mayor a 100 participa.
      * - Monto unitario entre 100 y 2600: solo pueden recibir 100 o 250 Bs como premio.
      * - Monto unitario entre 2601 o más: puede recibir 100, 250, 500, 1000, 2000 o 3000 Bs.
+     * - En el mercado informal, 3000 Bs solo se permite a los CI configurados.
      */
     public function getAllowedPrizeValuesForForm(Form $form): array
     {
@@ -282,6 +287,11 @@ class ParticipantService implements ParticipantServiceInteface
         } else {
             // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles
             $allowed = [100, 250, 500, 1000, 2000, 3000];
+        }
+
+        if ($form->type === 'informal-market'
+            && ! in_array(trim((string) $form->ci_number), $this->mayorista3000CiAllowlist, true)) {
+            $allowed = array_values(array_diff($allowed, [3000]));
         }
 
         // Restricción adicional temporal: Hasta el domingo 18 de octubre de 2026 (inclusive)

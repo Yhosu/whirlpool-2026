@@ -397,6 +397,23 @@ class WhirlpoolPrizeRulesTest extends TestCase
         $this->assertEquals([100, 250, 500], $service->getAllowedPrizeValuesForForm($form2601));
     }
 
+    public function test_3000_prize_is_restricted_to_configured_informal_market_ci_numbers(): void
+    {
+        Carbon::setTestNow('2026-10-19 12:00:00');
+
+        $service = app(\App\Repositories\ParticipantService::class);
+        $allowlist = new \ReflectionProperty($service, 'mayorista3000CiAllowlist');
+        $allowlist->setValue($service, ['11111111', '22222222', '33333333']);
+
+        $allowedForm = new Form(['type' => 'informal-market', 'ci_number' => '11111111']);
+        $otherInformalForm = new Form(['type' => 'informal-market', 'ci_number' => '99999999']);
+        $ecommerceForm = new Form(['type' => 'dismac', 'ci_number' => '99999999']);
+
+        $this->assertContains(3000, $service->getAllowedPrizeValuesForForm($allowedForm));
+        $this->assertNotContains(3000, $service->getAllowedPrizeValuesForForm($otherInformalForm));
+        $this->assertContains(3000, $service->getAllowedPrizeValuesForForm($ecommerceForm));
+    }
+
     public function test_admin_validating_pending_informal_market_form_changes_status_to_registered_and_sets_user_id(): void
     {
         $admin = \App\Models\User::create([
@@ -689,4 +706,3 @@ class WhirlpoolPrizeRulesTest extends TestCase
         $this->assertEquals(500.0, $assignedValue);
     }
 }
-
