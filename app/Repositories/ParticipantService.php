@@ -26,6 +26,8 @@ use Illuminate\Support\Facades\Log;
 class ParticipantService implements ParticipantServiceInteface
 {
     private array $mayorista3000CiAllowlist = [
+        '4272837',
+        '15450770'
         // Add the three authorized CI numbers here.
     ];
 
