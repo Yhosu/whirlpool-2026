@@ -84,6 +84,7 @@ class ParticipantService implements ParticipantServiceInteface
         }
     }
 
+    
     public function getAllQuantityPrices($type)
     {
         $pricesArrayFinal = [];
