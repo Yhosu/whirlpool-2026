@@ -60,3 +60,4 @@ class CanjeAlertMail extends Mailable
         return $attachments;
     }
 }
+
