@@ -26,6 +26,9 @@ class NotifyCanjesCommand extends Command
     protected $signature = 'report:canje-alert
                             {--email= : Correo destinatario (por defecto josuandroidg7@gmail.com)}
                             {--form-id= : ID específico del formulario a notificar}
+                            {--ci= : Notificar el canje por número de carnet de identidad}
+                            {--code= : Notificar por código de ruleta o control}
+                            {--last-informal : Notificar automáticamente el último canje del mercado informal}
                             {--test : Envía una prueba inmediata usando el canje más reciente}
                             {--limit=10 : Límite de canjes a procesar por ejecución}';
 
@@ -51,20 +54,56 @@ class NotifyCanjesCommand extends Command
             return $this->handleTestMode($recipients, $stockSummary);
         }
 
-        // 2. FORMULARIO ESPECÍFICO
+        // 2. FORMULARIO ESPECÍFICO (por ID, CI, Código o Último de Mercado Informal)
+        $targetForm = null;
+
         if ($formId = $this->option('form-id')) {
-            $form = Form::with(['prize', 'branch', 'sale', 'assignedCode'])->find($formId);
-            if (! $form) {
-                $this->error("No se encontró ningún formulario con el ID: {$formId}");
+            $targetForm = Form::with(['prize', 'branch', 'sale', 'assignedCode'])->find($formId);
+        } elseif ($ci = $this->option('ci')) {
+            $ciDigits = preg_replace('/[^0-9]/', '', (string) $ci);
+            $targetForm = Form::with(['prize', 'branch', 'sale', 'assignedCode'])
+                ->where(function ($q) use ($ci, $ciDigits) {
+                    $q->where('ci_number', 'like', "%{$ci}%");
+                    if (! empty($ciDigits)) {
+                        $q->orWhere('ci_number', 'like', "%{$ciDigits}%");
+                    }
+                })
+                ->whereIn('status', ['used', 'delivered'])
+                ->latest('updated_at')
+                ->first();
+        } elseif ($code = $this->option('code')) {
+            $targetForm = Form::with(['prize', 'branch', 'sale', 'assignedCode'])
+                ->where(function ($q) use ($code) {
+                    $q->where('code', $code)
+                      ->orWhere('control_code', $code);
+                })
+                ->whereIn('status', ['used', 'delivered'])
+                ->first();
+        } elseif ($this->option('last-informal')) {
+            $targetForm = Form::with(['prize', 'branch', 'sale', 'assignedCode'])
+                ->where(function ($q) {
+                    $q->where('type', 'informal-market')
+                      ->orWhere('business_unit', 'MERCADO INFORMAL');
+                })
+                ->whereIn('status', ['used', 'delivered'])
+                ->whereNotNull('prize_id')
+                ->latest('updated_at')
+                ->first();
+        }
 
-                return 1;
-            }
-
-            $this->sendNotification($form, $recipients, $stockSummary);
-            $this->markAsNotified($form);
-            $this->info("Canje {$form->id} notificado exitosamente.");
+        if ($targetForm) {
+            $this->info("Notificando canje: {$targetForm->name} (CI: {$targetForm->ci_number}) - Premio: Bs. ".($targetForm->prize?->amount ?? 0));
+            $this->sendNotification($targetForm, $recipients, $stockSummary);
+            $this->markAsNotified($targetForm);
+            $this->info("¡Canje {$targetForm->id} notificado exitosamente a los destinatarios!");
 
             return 0;
+        }
+
+        if ($this->option('form-id') || $this->option('ci') || $this->option('code') || $this->option('last-informal')) {
+            $this->error('No se encontró ningún canje coincidente con los parámetros proporcionados.');
+
+            return 1;
         }
 
         // 3. MODO CRON / TIEMPO REAL (FORGE)
