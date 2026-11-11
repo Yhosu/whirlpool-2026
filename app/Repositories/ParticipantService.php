@@ -25,12 +25,8 @@ use Illuminate\Support\Facades\Log;
 
 class ParticipantService implements ParticipantServiceInteface
 {
-    private array $mayorista3000CiAllowlist = [
-        '4272837',
-        '15450770',
-        '11112222',
-        // Add the three authorized CI numbers here.
-    ];
+    // Lista de carnets autorizados eliminada: la asignación es 100% al azar para todo el público
+    private array $mayorista3000CiAllowlist = [];
 
     protected $defaultPriceEcoId;
 
@@ -284,50 +280,14 @@ class ParticipantService implements ParticipantServiceInteface
 
         if ($unitAmount !== null) {
             if ($unitAmount <= 2600) {
-                $allowed = [100, 250];
+                return [100, 250];
             } else {
-                $allowed = [100, 250, 500, 1000, 2000, 3000];
-            }
-        } else {
-            // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles
-            $allowed = [100, 250, 500, 1000, 2000, 3000];
-        }
-
-        if ($form->type === 'informal-market') {
-            $formCiDigits = preg_replace('/[^0-9]/', '', (string) $form->ci_number);
-            $allowlistDigits = array_map(fn ($ci) => preg_replace('/[^0-9]/', '', (string) $ci), $this->mayorista3000CiAllowlist);
-
-            $isAllowedMayorista3000 = in_array(trim((string) $form->ci_number), $this->mayorista3000CiAllowlist, true)
-                || (! empty($formCiDigits) && in_array($formCiDigits, $allowlistDigits, true));
-
-            if ($isAllowedMayorista3000) {
-                // EXCLUSIVO: Si está en la lista de mayoristas autorizados, SOLO puede salir el premio de 3000 Bs
-                $allowed = [3000];
-            } else {
-                // Verificar si el carnet prioritario (15450770) ya utilizó su premio.
-                // Mientras NO lo haya utilizado, el premio de 3000 Bs queda reservado y se excluye del público.
-                // En cuanto el carnet 15450770 funcione y utilice su premio, se habilita 3000 para todo el público general.
-                $priorityCarnetUsed = Form::where('ci_number', 'like', '%15450770%')
-                    ->where('type', 'informal-market')
-                    ->whereIn('status', ['used', 'delivered'])
-                    ->exists();
-
-                if (! $priorityCarnetUsed) {
-                    // Se reserva 3000 y se excluye del público general mientras 15450770 no haya jugado
-                    $allowed = array_values(array_diff($allowed, [3000]));
-                }
-                // Una vez que 15450770 ya utilizó su premio, 3000 permanece en $allowed disponible para todos
+                return [100, 250, 500, 1000, 2000, 3000];
             }
         }
 
-        // Restricción adicional temporal: Hasta el domingo 18 de octubre de 2026 (inclusive)
-        // se restringe la salida máxima de premios únicamente a 100, 250 y 500 Bs,
-        // respetando las reglas base ya definidas (no afecta a los mayoristas autorizados a 3000).
-        if (! ($isAllowedMayorista3000 ?? false) && now()->lte(Carbon::parse('2026-10-18 23:59:59'))) {
-            $allowed = array_values(array_intersect($allowed, [100, 250, 500]));
-        }
-
-        return $allowed;
+        // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles 100% al azar
+        return [100, 250, 500, 1000, 2000, 3000];
     }
 
     /**
