@@ -36,6 +36,7 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutVite();
 
         $currentDb = config('database.default');
         if ($currentDb !== 'sqlite') {

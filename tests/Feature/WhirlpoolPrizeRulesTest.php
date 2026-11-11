@@ -397,6 +397,23 @@ class WhirlpoolPrizeRulesTest extends TestCase
         $this->assertEquals([100, 250, 500], $service->getAllowedPrizeValuesForForm($form2601));
     }
 
+    public function test_3000_prize_is_restricted_to_configured_informal_market_ci_numbers(): void
+    {
+        Carbon::setTestNow('2026-10-19 12:00:00');
+
+        $service = app(\App\Repositories\ParticipantService::class);
+        $allowlist = new \ReflectionProperty($service, 'mayorista3000CiAllowlist');
+        $allowlist->setValue($service, ['11111111', '22222222', '33333333']);
+
+        $allowedForm = new Form(['type' => 'informal-market', 'ci_number' => '11111111']);
+        $otherInformalForm = new Form(['type' => 'informal-market', 'ci_number' => '99999999']);
+        $ecommerceForm = new Form(['type' => 'dismac', 'ci_number' => '99999999']);
+
+        $this->assertEquals([3000], $service->getAllowedPrizeValuesForForm($allowedForm));
+        $this->assertNotContains(3000, $service->getAllowedPrizeValuesForForm($otherInformalForm));
+        $this->assertContains(3000, $service->getAllowedPrizeValuesForForm($ecommerceForm));
+    }
+
     public function test_admin_validating_pending_informal_market_form_changes_status_to_registered_and_sets_user_id(): void
     {
         $admin = \App\Models\User::create([
@@ -688,5 +705,101 @@ class WhirlpoolPrizeRulesTest extends TestCase
         $assignedValue = (float) $data['assigned_code']['value'];
         $this->assertEquals(500.0, $assignedValue);
     }
-}
 
+    public function test_mayorista_3000_ci_allowlist_restricts_3000_prize_in_informal_market(): void
+    {
+        Carbon::setTestNow('2026-11-10 12:00:00');
+
+        $service = app(\App\Repositories\ParticipantService::class);
+
+        // 1. CI NO autorizado en informal-market -> excluye 3000
+        $formUnauthorized = new Form([
+            'type' => 'informal-market',
+            'ci_number' => '9999999',
+        ]);
+        $this->assertEquals([100, 250, 500, 1000, 2000], $service->getAllowedPrizeValuesForForm($formUnauthorized));
+
+        // 2. CIs autorizados en $mayorista3000CiAllowlist ('4272837' y '15450770') -> fuerza obligatoriamente [3000]
+        foreach (['4272837', ' 4272837 ', '15450770'] as $allowedCi) {
+            $formAuthorized = new Form([
+                'type' => 'informal-market',
+                'ci_number' => $allowedCi,
+            ]);
+            $this->assertEquals([3000], $service->getAllowedPrizeValuesForForm($formAuthorized));
+        }
+
+        // 3. Prueba end-to-end con /api/mark-as-used teniendo stock en TODOS los premios (100, 250, 500, 1000, 2000 y 3000)
+        $branchMay = Branch::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'CashBack Mayoristas',
+            'channel' => 'MAYORISTA',
+            'city' => 'Santa Cruz',
+        ]);
+
+        $prizes = [];
+        foreach ([100, 250, 500, 1000, 2000, 3000] as $amount) {
+            $p = Prize::create([
+                'id' => (string) Str::uuid(),
+                'name' => "Premio {$amount} Bs",
+                'amount' => $amount,
+                'active' => true,
+            ]);
+            $prizes[$amount] = $p;
+
+            PrizeBranch::create([
+                'id' => (string) Str::uuid(),
+                'prize_id' => $p->id,
+                'branch_id' => $branchMay->id,
+                'stock' => 50,
+            ]);
+        }
+
+        // 3a. Participante con CI '4272837' gana OBLIGATORIAMENTE 3000 Bs aunque haya mucho stock de los demás premios
+        $formAllow1 = Form::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cliente Informal Autorizado 1',
+            'ci_number' => '4272837',
+            'code' => 'INF002',
+            'status' => 'registered',
+            'type' => 'informal-market',
+        ]);
+
+        $resAllow1 = $this->postJson('/api/mark-as-used', [
+            'id' => $formAllow1->id,
+        ]);
+        $resAllow1->assertStatus(200);
+        $this->assertEquals($prizes[3000]->id, $resAllow1->json('data.prize_id'));
+
+        // 3b. Participante con CI '15450770' gana OBLIGATORIAMENTE 3000 Bs aunque haya mucho stock de los demás premios
+        $formAllow2 = Form::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cliente Informal Autorizado 2',
+            'ci_number' => '15450770',
+            'code' => 'INF003',
+            'status' => 'registered',
+            'type' => 'informal-market',
+        ]);
+
+        $resAllow2 = $this->postJson('/api/mark-as-used', [
+            'id' => $formAllow2->id,
+        ]);
+        $resAllow2->assertStatus(200);
+        $this->assertEquals($prizes[3000]->id, $resAllow2->json('data.prize_id'));
+
+        // 3c. Participante normal (otro CI) recibe premio al azar entre [100, 250, 500, 1000, 2000] y NUNCA 3000
+        $formNormal = Form::create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cliente Informal Normal',
+            'ci_number' => '7777777',
+            'code' => 'INF001',
+            'status' => 'registered',
+            'type' => 'informal-market',
+        ]);
+
+        $resNormal = $this->postJson('/api/mark-as-used', [
+            'id' => $formNormal->id,
+        ]);
+        $resNormal->assertStatus(200);
+        $this->assertNotEquals($prizes[3000]->id, $resNormal->json('data.prize_id'));
+    }
+}
