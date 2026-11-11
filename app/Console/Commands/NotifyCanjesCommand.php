@@ -107,7 +107,8 @@ class NotifyCanjesCommand extends Command
 
         $query = Form::with(['prize', 'branch', 'sale', 'assignedCode'])
             ->whereIn('status', ['used', 'delivered'])
-            ->whereNotNull('prize_id');
+            ->whereNotNull('prize_id')
+            ->where('updated_at', '>=', now()->subHours(24));
 
         if ($hasColumn) {
             $query->whereNull('canje_notified_at');

@@ -16,6 +16,12 @@ return new class extends Migration
                 $table->timestamp('canje_notified_at')->nullable()->after('updated_at');
             }
         });
+
+        // Marcar todos los canjes antiguos ya existentes como notificados para evitar spam inicial
+        \Illuminate\Support\Facades\DB::table('forms')
+            ->whereIn('status', ['used', 'delivered'])
+            ->whereNull('canje_notified_at')
+            ->update(['canje_notified_at' => now()]);
     }
 
     /**
@@ -30,3 +36,4 @@ return new class extends Migration
         });
     }
 };
+
