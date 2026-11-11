@@ -25,7 +25,6 @@ use Illuminate\Support\Facades\Log;
 
 class ParticipantService implements ParticipantServiceInteface
 {
-    // Lista de carnets autorizados eliminada: la asignación es 100% al azar para todo el público
     private array $mayorista3000CiAllowlist = [];
 
     protected $defaultPriceEcoId;
@@ -287,7 +286,7 @@ class ParticipantService implements ParticipantServiceInteface
             }
         }
 
-        // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles 100% al azar
+        // Si no tiene monto unitario definido (ej. mercado informal), todos los premios disponibles
         return [100, 250, 500, 1000, 2000, 3000];
     }
 
