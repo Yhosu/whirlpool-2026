@@ -770,22 +770,14 @@ class ParticipantService implements ParticipantServiceInteface
             ]);
         }
 
-        // Los carnets autorizados de mayoristas se auto-validan en estado 'registered'
-        // para que puedan raspar inmediatamente sin bloquearse por validación previa.
-        $formCiDigits = preg_replace('/[^0-9]/', '', (string) $ciNumber);
-        $allowlistDigits = array_map(fn ($ci) => preg_replace('/[^0-9]/', '', (string) $ci), $this->mayorista3000CiAllowlist);
-        $isAllowlisted = in_array(trim((string) $ciNumber), $this->mayorista3000CiAllowlist, true)
-            || (! empty($formCiDigits) && in_array($formCiDigits, $allowlistDigits, true));
-
-        $status = $isAllowlisted ? 'registered' : 'pending';
-
+        // Crear formulario en estado pending para que el admin pueda validarlo con el botón "Validar"
         return Form::create([
             'name' => $name,
             'ci_number' => $ciNumber,
             'cellphone' => $cellphone,
             'city' => $city,
             'code' => $code,
-            'status' => $status,
+            'status' => 'pending',
             'type' => 'informal-market',
             'business_unit' => 'MERCADO INFORMAL',
             'invoice_image' => $uploadResult['path'],
