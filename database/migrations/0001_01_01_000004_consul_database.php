@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('name')->nullable();
             $table->text('address')->nullable();
             $table->text('schedule')->nullable();
-            $table->enum('city', ['Chuquisaca', 'Cochabamba', 'El Alto', 'La Paz', 'Montero', 'Santa Cruz', 'Tarija'])->nullable()->comment('Ciudad|Ciudad');
+            $table->string('city')->nullable()->comment('Ciudad|Ciudad');
             $table->enum('channel', ['RETAIL', 'MAYORISTA', 'ECOMMERCE'])->nullable();
             $table->timestamps();
 
@@ -40,7 +40,7 @@ return new class extends Migration
             $table->string('invoice_image')->nullable()->comment('Imagen|Imagen');
             $table->string('invoice_url')->nullable()->comment('URL Imagen|URL Imagen');
             $table->string('control_code')->nullable()->comment('Código de control|Código de control');
-            $table->enum('city', ['Chuquisaca', 'Cochabamba', 'El Alto', 'La Paz', 'Montero', 'Santa Cruz', 'Tarija'])->nullable()->comment('Ciudad|Ciudad');
+            $table->string('city')->nullable()->comment('Ciudad|Ciudad');
             $table->enum('status', ['registered', 'pending', 'invalidated', 'delivered', 'used'])->default('registered')->comment('Estado|Estado');
             $table->enum('type', ['dismac', 'informal-market'])->nullable()->default('informal-market');
             $table->uuid('sale_id')->nullable()->comment('Venta|Venta');

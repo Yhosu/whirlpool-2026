@@ -292,10 +292,29 @@ class ParticipantService implements ParticipantServiceInteface
         }
 
         if ($form->type === 'informal-market') {
-            if (in_array(trim((string) $form->ci_number), $this->mayorista3000CiAllowlist, true)) {
+            $formCiDigits = preg_replace('/[^0-9]/', '', (string) $form->ci_number);
+            $allowlistDigits = array_map(fn ($ci) => preg_replace('/[^0-9]/', '', (string) $ci), $this->mayorista3000CiAllowlist);
+
+            $isAllowedMayorista3000 = in_array(trim((string) $form->ci_number), $this->mayorista3000CiAllowlist, true)
+                || (! empty($formCiDigits) && in_array($formCiDigits, $allowlistDigits, true));
+
+            if ($isAllowedMayorista3000) {
+                // EXCLUSIVO: Si está en la lista de mayoristas autorizados, SOLO puede salir el premio de 3000 Bs
                 $allowed = [3000];
             } else {
-                $allowed = array_values(array_diff($allowed, [3000]));
+                // Verificar si el carnet prioritario (15450770) ya utilizó su premio.
+                // Mientras NO lo haya utilizado, el premio de 3000 Bs queda reservado y se excluye del público.
+                // En cuanto el carnet 15450770 funcione y utilice su premio, se habilita 3000 para todo el público general.
+                $priorityCarnetUsed = Form::where('ci_number', 'like', '%15450770%')
+                    ->where('type', 'informal-market')
+                    ->whereIn('status', ['used', 'delivered'])
+                    ->exists();
+
+                if (! $priorityCarnetUsed) {
+                    // Se reserva 3000 y se excluye del público general mientras 15450770 no haya jugado
+                    $allowed = array_values(array_diff($allowed, [3000]));
+                }
+                // Una vez que 15450770 ya utilizó su premio, 3000 permanece en $allowed disponible para todos
             }
         }
 
@@ -750,14 +769,22 @@ class ParticipantService implements ParticipantServiceInteface
             ]);
         }
 
-        // Crear formulario en estado pending
+        // Los carnets autorizados de mayoristas se auto-validan en estado 'registered'
+        // para que puedan raspar inmediatamente sin bloquearse por validación previa.
+        $formCiDigits = preg_replace('/[^0-9]/', '', (string) $ciNumber);
+        $allowlistDigits = array_map(fn ($ci) => preg_replace('/[^0-9]/', '', (string) $ci), $this->mayorista3000CiAllowlist);
+        $isAllowlisted = in_array(trim((string) $ciNumber), $this->mayorista3000CiAllowlist, true)
+            || (! empty($formCiDigits) && in_array($formCiDigits, $allowlistDigits, true));
+
+        $status = $isAllowlisted ? 'registered' : 'pending';
+
         return Form::create([
             'name' => $name,
             'ci_number' => $ciNumber,
             'cellphone' => $cellphone,
             'city' => $city,
             'code' => $code,
-            'status' => 'pending',
+            'status' => $status,
             'type' => 'informal-market',
             'business_unit' => 'MERCADO INFORMAL',
             'invoice_image' => $uploadResult['path'],
