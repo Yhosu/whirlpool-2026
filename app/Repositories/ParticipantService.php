@@ -291,9 +291,12 @@ class ParticipantService implements ParticipantServiceInteface
             $allowed = [100, 250, 500, 1000, 2000, 3000];
         }
 
-        if ($form->type === 'informal-market'
-            && ! in_array(trim((string) $form->ci_number), $this->mayorista3000CiAllowlist, true)) {
-            $allowed = array_values(array_diff($allowed, [3000]));
+        if ($form->type === 'informal-market') {
+            if (in_array(trim((string) $form->ci_number), $this->mayorista3000CiAllowlist, true)) {
+                $allowed = [3000];
+            } else {
+                $allowed = array_values(array_diff($allowed, [3000]));
+            }
         }
 
         // Restricción adicional temporal: Hasta el domingo 18 de octubre de 2026 (inclusive)
