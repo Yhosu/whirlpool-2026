@@ -41,14 +41,14 @@ class NotifyCanjesCommand extends Command
      */
     public function handle(): int
     {
-        $recipient = $this->option('email') ?: env('CANJE_ALERT_EMAIL', 'josuandroidg7@gmail.com');
-        $this->info("Iniciando verificación de canjes. Destinatario: {$recipient}");
+        $recipients = $this->getRecipients();
+        $this->info("Iniciando verificación de canjes. Destinatarios: " . implode(', ', $recipients));
 
         $stockSummary = $this->calculateStockSummary();
 
         // 1. MODO PRUEBA
         if ($this->option('test')) {
-            return $this->handleTestMode($recipient, $stockSummary);
+            return $this->handleTestMode($recipients, $stockSummary);
         }
 
         // 2. FORMULARIO ESPECÍFICO
@@ -60,7 +60,7 @@ class NotifyCanjesCommand extends Command
                 return 1;
             }
 
-            $this->sendNotification($form, $recipient, $stockSummary);
+            $this->sendNotification($form, $recipients, $stockSummary);
             $this->markAsNotified($form);
             $this->info("Canje {$form->id} notificado exitosamente.");
 
@@ -68,13 +68,39 @@ class NotifyCanjesCommand extends Command
         }
 
         // 3. MODO CRON / TIEMPO REAL (FORGE)
-        return $this->handlePendingCanjes($recipient, $stockSummary);
+        return $this->handlePendingCanjes($recipients, $stockSummary);
+    }
+
+    /**
+     * Obtiene la lista de destinatarios.
+     */
+    protected function getRecipients(): array
+    {
+        if ($emailOpt = $this->option('email')) {
+            return array_map('trim', explode(',', $emailOpt));
+        }
+
+        if ($envEmails = env('CANJE_ALERT_EMAILS')) {
+            return array_map('trim', explode(',', $envEmails));
+        }
+
+        $configEmails = config('weekly_report.recipients_canje');
+        if (! empty($configEmails) && is_array($configEmails)) {
+            return $configEmails;
+        }
+
+        return [
+            'josuandroidg7@gmail.com',
+            'hernan@gooncomunicacion.com',
+            'christian@gooncomunicacion.com',
+            'sortega@dismac.com.bo',
+        ];
     }
 
     /**
      * Procesa canjes pendientes no notificados.
      */
-    protected function handlePendingCanjes(string $recipient, array $stockSummary): int
+    protected function handlePendingCanjes(array $recipients, array $stockSummary): int
     {
         $limit = (int) $this->option('limit');
         $hasColumn = Schema::hasColumn('forms', 'canje_notified_at');
@@ -110,7 +136,7 @@ class NotifyCanjesCommand extends Command
 
         foreach ($toNotify as $form) {
             try {
-                $this->sendNotification($form, $recipient, $stockSummary);
+                $this->sendNotification($form, $recipients, $stockSummary);
                 $this->markAsNotified($form);
                 $this->info("✓ Notificado canje: Form {$form->id} (CI: {$form->ci_number}, Premio: Bs. ".($form->prize?->amount ?? 0).')');
             } catch (\Exception $e) {
@@ -125,7 +151,7 @@ class NotifyCanjesCommand extends Command
     /**
      * Envía una notificación de prueba.
      */
-    protected function handleTestMode(string $recipient, array $stockSummary): int
+    protected function handleTestMode(array $recipients, array $stockSummary): int
     {
         $this->info('Generando envío de prueba...');
 
@@ -146,8 +172,8 @@ class NotifyCanjesCommand extends Command
         }
 
         $this->info("Usando formulario para prueba: CI {$form->ci_number} ({$form->name}) - Premio: Bs. ".($form->prize?->amount ?? 3000));
-        $this->sendNotification($form, $recipient, $stockSummary);
-        $this->info("¡Correo de prueba enviado exitosamente a {$recipient}!");
+        $this->sendNotification($form, $recipients, $stockSummary);
+        $this->info("¡Correo de prueba enviado exitosamente a: " . implode(', ', $recipients) . "!");
 
         return 0;
     }
@@ -155,7 +181,7 @@ class NotifyCanjesCommand extends Command
     /**
      * Envía el correo con comprobante adjunto.
      */
-    protected function sendNotification(Form $form, string $recipient, array $stockSummary): void
+    protected function sendNotification(Form $form, array|string $recipients, array $stockSummary): void
     {
         $tempAttachment = $this->resolveAttachmentPath($form);
         $attachmentPath = $tempAttachment['path'] ?? null;
@@ -163,7 +189,7 @@ class NotifyCanjesCommand extends Command
         $shouldDelete = $tempAttachment['is_temp'] ?? false;
 
         try {
-            Mail::to($recipient)->send(new CanjeAlertMail($form, $stockSummary, $attachmentPath, $attachmentName));
+            Mail::to($recipients)->send(new CanjeAlertMail($form, $stockSummary, $attachmentPath, $attachmentName));
         } finally {
             if ($shouldDelete && $attachmentPath && file_exists($attachmentPath)) {
                 @unlink($attachmentPath);
@@ -294,3 +320,4 @@ class NotifyCanjesCommand extends Command
         ];
     }
 }
+

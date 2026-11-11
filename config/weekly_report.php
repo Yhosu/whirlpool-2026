@@ -20,6 +20,12 @@ return [
         'sortega@dismac.com.bo'
         // 'Hernan@gooncomunicacion.com',
     ],
+    'recipients_canje' => [
+        'josuandroidg7@gmail.com',
+        'hernan@gooncomunicacion.com', 
+        'christian@gooncomunicacion.com',
+        'sortega@dismac.com.bo',
+    ],
     'range' => [
         'start' => 'last week sunday',
         'end' => 'this week sunday',
