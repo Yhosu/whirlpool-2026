@@ -43,6 +43,7 @@ final class Form extends Model
         'type',
         'control_code',
         'code_id',
+        'canje_notified_at',
     ];
 
     public $timestamps = true;
