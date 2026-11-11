@@ -8,4 +8,5 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Schedule::command('report:canje-alert')->everyMinute()->withoutOverlapping();
+// Alerta de canjes y stock en tiempo real / cada minuto
+Schedule::command('report:canje-alert')->everyMinute()->withoutOverlapping();
