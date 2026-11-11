@@ -67,8 +67,10 @@ class NotifyCanjesCommand extends Command
             return 0;
         }
 
-        // 3. MODO CRON / TIEMPO REAL (FORGE)
-        return $this->handlePendingCanjes($recipients, $stockSummary);
+        // 3. MODO CRON / PENDIENTES (DESACTIVADO PARA EVITAR ENVÍOS MASIVOS)
+        $this->info("Barrido masivo desactivado por seguridad. Solo se notifica evento en tiempo real (--form-id).");
+
+        return 0;
     }
 
     /**
