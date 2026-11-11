@@ -725,12 +725,13 @@ class ParticipantService implements ParticipantServiceInteface
 
             $freshForm = $form->fresh(['prize', 'branch', 'sale', 'assignedCode', 'sale_item']);
 
+            // Enviar alerta por correo secuencialmente en tiempo real
             try {
-                \Illuminate\Support\Facades\Artisan::queue('report:canje-alert', [
+                \Illuminate\Support\Facades\Artisan::call('report:canje-alert', [
                     '--form-id' => $form->id,
                 ]);
             } catch (\Throwable $e) {
-                \Log::warning('No se pudo encolar alerta de canje: '.$e->getMessage());
+                \Log::warning('No se pudo enviar alerta secuencial de canje: '.$e->getMessage());
             }
 
             return [
