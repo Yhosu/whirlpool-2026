@@ -43,6 +43,7 @@ class ParticipantService implements ParticipantServiceInteface
     {
         return app()->environment('testing') ? null : 'file';
     }
+    
 
     public function registerParticipant(array $data): array
     {
