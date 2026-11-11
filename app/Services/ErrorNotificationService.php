@@ -24,6 +24,11 @@ class ErrorNotificationService
      */
     public static function notify(Throwable $exception): void
     {
+        // Solo notificar errores en entorno de producción. NUNCA en local ni en testing.
+        if (! app()->environment('production')) {
+            return;
+        }
+
         // 1. Filtrar excepciones del lado del cliente o normales de flujo HTTP (< 500)
         if ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() < 500) {
             return;
@@ -56,8 +61,8 @@ class ErrorNotificationService
             $payload = static::buildPayload($exception);
             $recipient = env('ERROR_NOTIFICATION_EMAIL', self::DEFAULT_RECIPIENT);
 
-            // Usar prioritariamente el mailer de Resend configurado en .env
-            $mailer = config('mail.mailers.resend') ? 'resend' : config('mail.default');
+            // Respetar el mailer configurado en la aplicación (ej. log en local, resend en prod)
+            $mailer = config('mail.default');
 
             Mail::mailer($mailer)->to($recipient)->send(new ServerErrorMail($payload));
         } catch (Throwable $mailException) {
