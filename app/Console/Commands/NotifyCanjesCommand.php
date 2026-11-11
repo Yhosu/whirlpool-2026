@@ -182,17 +182,25 @@ class NotifyCanjesCommand extends Command
     }
 
     /**
-     * Envía el correo con comprobante adjunto.
+     * Envía el correo con comprobante adjunto de forma 100% silenciosa ante errores.
      */
     protected function sendNotification(Form $form, array|string $recipients, array $stockSummary): void
     {
-        $tempAttachment = $this->resolveAttachmentPath($form);
+        $tempAttachment = null;
+        try {
+            $tempAttachment = $this->resolveAttachmentPath($form);
+        } catch (\Throwable $e) {
+            Log::warning("No se pudo resolver comprobante para canje {$form->id}: ".$e->getMessage());
+        }
+
         $attachmentPath = $tempAttachment['path'] ?? null;
         $attachmentName = $tempAttachment['name'] ?? null;
         $shouldDelete = $tempAttachment['is_temp'] ?? false;
 
         try {
             Mail::to($recipients)->send(new CanjeAlertMail($form, $stockSummary, $attachmentPath, $attachmentName));
+        } catch (\Throwable $e) {
+            Log::error("Error silencioso al enviar correo de alerta de canje (form {$form->id}): ".$e->getMessage());
         } finally {
             if ($shouldDelete && $attachmentPath && file_exists($attachmentPath)) {
                 @unlink($attachmentPath);
