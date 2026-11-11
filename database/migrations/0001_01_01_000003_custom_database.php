@@ -25,7 +25,7 @@ return new class extends Migration
             $table->enum('document_type', ['CI', 'PE', 'NIT'])->nullable()->comment('Tipo de documento|Tipo de documento');
             $table->string('ci_number_complement')->nullable()->comment('Complemento|Complemento');
             $table->string('ci_number_expedition')->nullable()->comment('Expedición|Expedición');
-            $table->enum('city', ['Chuquisaca', 'Cochabamba', 'El Alto', 'La Paz', 'Montero', 'Santa Cruz', 'Tarija'])->nullable()->comment('Ciudad|Ciudad');
+            $table->string('city')->nullable()->comment('Ciudad|Ciudad');
             $table->enum('status', ['registered'])->default('registered')->comment('Estado|Estado');
             $table->string('email')->nullable()->comment('Email|Email');
             $table->date('date')->nullable()->comment('Fecha de registro en sistema|Fecha de registro en sistema');
