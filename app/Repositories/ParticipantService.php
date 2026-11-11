@@ -27,7 +27,8 @@ class ParticipantService implements ParticipantServiceInteface
 {
     private array $mayorista3000CiAllowlist = [
         '4272837',
-        '15450770'
+        '15450770',
+        '11112222',
         // Add the three authorized CI numbers here.
     ];
 
@@ -320,9 +321,9 @@ class ParticipantService implements ParticipantServiceInteface
 
         // Restricción adicional temporal: Hasta el domingo 18 de octubre de 2026 (inclusive)
         // se restringe la salida máxima de premios únicamente a 100, 250 y 500 Bs,
-        // respetando las reglas base ya definidas.
-        if (now()->lte(Carbon::parse('2026-11-15 23:59:59'))) {
-            $allowed = array_values(array_intersect($allowed, [100, 250, 500, 1000, 2000]));
+        // respetando las reglas base ya definidas (no afecta a los mayoristas autorizados a 3000).
+        if (! ($isAllowedMayorista3000 ?? false) && now()->lte(Carbon::parse('2026-10-18 23:59:59'))) {
+            $allowed = array_values(array_intersect($allowed, [100, 250, 500]));
         }
 
         return $allowed;
