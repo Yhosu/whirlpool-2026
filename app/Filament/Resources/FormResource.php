@@ -686,6 +686,7 @@ class FormResource extends Resource
                     ->color('danger')
                     ->slideOver()
                     ->modalHeading('Anulación de Formulario / Premio')
+                    ->modalDescription('Importante: Si este formulario ya giró la ruleta y tenía un premio asignado, el sistema devolverá automáticamente +1 al stock de ese premio. No es necesario agregarlo manualmente en la Matriz de Stock.')
                     ->visible(fn (?FormModel $record) => $record && in_array($record->status, ['registered', 'used', 'pending']))
                     ->form([
                         Textarea::make('invalidation_reason')

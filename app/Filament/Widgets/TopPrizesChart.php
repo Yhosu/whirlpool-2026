@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Form as FormModel;
+use App\Models\Prize;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Carbon;
@@ -12,7 +13,7 @@ class TopPrizesChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Premios Asignados / Entregados';
+    protected static ?string $heading = 'Premios Válidos Entregados por Canal';
 
     protected static ?int $sort = 5;
 
@@ -29,30 +30,42 @@ class TopPrizesChart extends ChartWidget
 
     protected function getData(): array
     {
-        $startDate = $this->filters['startDate'] ?? now()->startOfDay();
-        $endDate = $this->filters['endDate'] ?? now()->endOfDay();
+        $startDate = ! empty($this->filters['startDate']) ? $this->filters['startDate'] : now()->startOfDay();
+        $endDate = ! empty($this->filters['endDate']) ? $this->filters['endDate'] : now()->endOfDay();
 
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
 
-        $data = FormModel::join('prizes', 'forms.prize_id', '=', 'prizes.id')
-            ->whereBetween('forms.created_at', [$start, $end])
-            ->select('prizes.name', DB::raw('count(*) as total'))
-            ->groupBy('prizes.name')
-            ->orderByDesc('total')
+        $prizes = Prize::orderBy('amount', 'asc')->get();
+
+        $deliveredCounts = FormModel::whereBetween('created_at', [$start, $end])
+            ->whereIn('status', ['used', 'delivered'])
+            ->whereNotNull('prize_id')
+            ->select('prize_id', 'type', DB::raw('count(*) as total'))
+            ->groupBy('prize_id', 'type')
             ->get();
 
-        $labels = $data->pluck('name')->toArray();
-        $totals = $data->pluck('total')->toArray();
+        $labels = [];
+        $dismacData = [];
+        $informalData = [];
+
+        foreach ($prizes as $prize) {
+            $labels[] = $prize->name;
+            $dismacData[] = (int) ($deliveredCounts->firstWhere(fn ($r) => $r->prize_id == $prize->id && $r->type === 'dismac')?->total ?? 0);
+            $informalData[] = (int) ($deliveredCounts->firstWhere(fn ($r) => $r->prize_id == $prize->id && $r->type === 'informal-market')?->total ?? 0);
+        }
 
         return [
             'datasets' => [
                 [
-                    'label' => 'Premios Asignados',
-                    'data' => $totals,
-                    'backgroundColor' => [
-                        '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4',
-                    ],
+                    'label' => 'Dismac (Ecommerce)',
+                    'data' => $dismacData,
+                    'backgroundColor' => '#E22319',
+                ],
+                [
+                    'label' => 'Mercado Informal',
+                    'data' => $informalData,
+                    'backgroundColor' => '#2563eb',
                 ],
             ],
             'labels' => $labels,
@@ -64,3 +77,4 @@ class TopPrizesChart extends ChartWidget
         return 'bar';
     }
 }
+

@@ -12,7 +12,7 @@ class FormTypeChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Formularios por Canal / Tipo';
+    protected static ?string $heading = 'Formularios por Canal y Validez';
 
     protected static ?int $sort = 3;
 
@@ -35,31 +35,33 @@ class FormTypeChart extends ChartWidget
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
 
-        $data = FormModel::select('type', DB::raw('count(*) as total'))
-            ->whereBetween('created_at', [$start, $end])
-            ->whereNotNull('type')
-            ->groupBy('type')
-            ->pluck('total', 'type');
+        $base = FormModel::whereBetween('created_at', [$start, $end]);
 
-        $typeLabels = [
-            'dismac' => 'Dismac',
-            'informal-market' => 'Mercado Informal',
-        ];
+        $dismacValid = (clone $base)->where('type', 'dismac')->whereIn('status', ['used', 'delivered'])->count();
+        $dismacInvalid = (clone $base)->where('type', 'dismac')->where('status', 'invalidated')->count();
 
-        $colors = [
-            'dismac' => '#E22319',
-            'informal-market' => '#64748b',
+        $informalValid = (clone $base)->where('type', 'informal-market')->whereIn('status', ['used', 'delivered'])->count();
+        $informalPending = (clone $base)->where('type', 'informal-market')->whereIn('status', ['registered', 'pending'])->count();
+        $informalInvalid = (clone $base)->where('type', 'informal-market')->where('status', 'invalidated')->count();
+
+        $items = [
+            'Dismac (Válidos)' => [$dismacValid, '#E22319'],
+            'Dismac (Invalidados)' => [$dismacInvalid, '#f87171'],
+            'Informal (Válidos)' => [$informalValid, '#2563eb'],
+            'Informal (Pendientes)' => [$informalPending, '#f59e0b'],
+            'Informal (Invalidados)' => [$informalInvalid, '#64748b'],
         ];
 
         $labels = [];
         $values = [];
         $bgColors = [];
 
-        foreach ($typeLabels as $key => $label) {
-            $count = $data->get($key, 0);
-            $labels[] = $label;
-            $values[] = $count;
-            $bgColors[] = $colors[$key];
+        foreach ($items as $label => [$val, $color]) {
+            if ($val > 0 || ($dismacValid + $dismacInvalid + $informalValid + $informalPending + $informalInvalid) === 0) {
+                $labels[] = $label;
+                $values[] = $val;
+                $bgColors[] = $color;
+            }
         }
 
         return [

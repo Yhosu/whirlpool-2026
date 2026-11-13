@@ -58,6 +58,7 @@ class Dashboard extends BaseDashboard
                                 $withPrize = (clone $query)->whereNotNull('prize_id')->count();
                                 $delivered = (clone $query)->whereIn('status', ['delivered', 'used'])->count();
                                 $pending = (clone $query)->whereIn('status', ['registered', 'pending'])->count();
+                                $invalidated = (clone $query)->where('status', 'invalidated')->count();
                                 $uniqueClients = (clone $query)->whereNotNull('ci_number')->distinct('ci_number')->count('ci_number');
 
                                 return new HtmlString("
@@ -69,6 +70,8 @@ class Dashboard extends BaseDashboard
                                         <div>Canjeados / Entregados: <span class='text-emerald-600 font-bold text-base'>{$delivered}</span></div>
                                         <span class='text-gray-400 font-normal'>|</span>
                                         <div>Pendientes: <span class='text-amber-600 font-bold text-base'>{$pending}</span></div>
+                                        <span class='text-gray-400 font-normal'>|</span>
+                                        <div>Invalidados: <span class='text-rose-600 font-bold text-base'>{$invalidated}</span></div>
                                         <span class='text-gray-400 font-normal'>|</span>
                                         <div>Clientes Únicos (CI): <span class='text-blue-600 font-bold text-base'>{$uniqueClients}</span></div>
                                     </div>

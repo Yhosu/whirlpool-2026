@@ -14,7 +14,7 @@ class TopBranchesChart extends ChartWidget
 
     protected static ?string $heading = 'Formularios por Sucursal';
 
-    protected static ?int $sort = 6;
+    protected static ?int $sort = 7;
 
     public static function canView(): bool
     {

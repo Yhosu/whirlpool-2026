@@ -14,7 +14,9 @@ class LatestFormsTableWidget extends BaseWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?int $sort = 7;
+    protected static bool $isLazy = false;
+
+    protected static ?int $sort = 8;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -25,20 +27,38 @@ class LatestFormsTableWidget extends BaseWidget
         return auth()->user()->isAdmin() || auth()->user()->isSubadmin();
     }
 
+    public function getTable(): Table
+    {
+        if (! isset($this->table)) {
+            $this->bootedInteractsWithTable();
+        }
+
+        return parent::getTable();
+    }
+
+    public function render(): \Illuminate\Contracts\View\View
+    {
+        if (! isset($this->table)) {
+            $this->bootedInteractsWithTable();
+        }
+
+        return parent::render();
+    }
+
     public function table(Table $table): Table
     {
-        $startDate = $this->filters['startDate'] ?? now()->startOfDay();
-        $endDate = $this->filters['endDate'] ?? now()->endOfDay();
-
-        $start = Carbon::parse($startDate)->startOfDay();
-        $end = Carbon::parse($endDate)->endOfDay();
-
         return $table
-            ->query(
-                FormModel::query()
+            ->query(function () {
+                $startDate = ! empty($this->filters['startDate']) ? $this->filters['startDate'] : now()->startOfDay();
+                $endDate = ! empty($this->filters['endDate']) ? $this->filters['endDate'] : now()->endOfDay();
+
+                $start = Carbon::parse($startDate)->startOfDay();
+                $end = Carbon::parse($endDate)->endOfDay();
+
+                return FormModel::query()
                     ->whereBetween('created_at', [$start, $end])
-                    ->latest()
-            )
+                    ->latest();
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Cliente')

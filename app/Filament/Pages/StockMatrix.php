@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\PrizeStockHistoryResource;
 use App\Models\Branch;
+use App\Models\Form as FormModel;
 use App\Models\Prize;
 use App\Models\PrizeBranch;
 use App\Models\PrizeStockHistory;
@@ -121,6 +122,7 @@ class StockMatrix extends Page
                         ->toArray();
 
                     $initialStockRecords = PrizeStockHistory::where('type', 'addition')
+                        ->whereNull('form_id')
                         ->select('prize_id', 'branch_id', DB::raw('SUM(quantity) as total_initial'))
                         ->groupBy('prize_id', 'branch_id')
                         ->get();
@@ -135,7 +137,21 @@ class StockMatrix extends Page
                         }
                     }
 
-                    $data = $branches->map(function ($branch) use ($prizes, $stockMap, $initialStockMap) {
+                    $validDeliveredRecords = FormModel::whereIn('status', ['used', 'delivered'])
+                        ->whereNotNull('prize_id')
+                        ->whereNotNull('branch_id')
+                        ->select('prize_id', 'branch_id', DB::raw('COUNT(*) as total'))
+                        ->groupBy('prize_id', 'branch_id')
+                        ->get();
+
+                    $invalidatedRecords = FormModel::where('status', 'invalidated')
+                        ->whereNotNull('prize_id')
+                        ->whereNotNull('branch_id')
+                        ->select('prize_id', 'branch_id', DB::raw('COUNT(*) as total'))
+                        ->groupBy('prize_id', 'branch_id')
+                        ->get();
+
+                    $data = $branches->map(function ($branch) use ($prizes, $stockMap, $initialStockMap, $validDeliveredRecords, $invalidatedRecords) {
                         $row = [
                             'Ciudad' => $branch->city,
                             'Sucursal' => $branch->name,
@@ -144,19 +160,29 @@ class StockMatrix extends Page
 
                         $totalActual = 0;
                         $totalInicial = 0;
+                        $totalValidDelivered = 0;
+                        $totalInvalidated = 0;
                         foreach ($prizes as $prize) {
                             $stock = $stockMap["{$prize->id}.{$branch->id}"] ?? 0;
                             $initial = $initialStockMap["{$prize->id}.{$branch->id}"] ?? 0;
+                            $valid = (int) ($validDeliveredRecords->firstWhere(fn ($r) => $r->prize_id == $prize->id && $r->branch_id == $branch->id)?->total ?? 0);
+                            $invalid = (int) ($invalidatedRecords->firstWhere(fn ($r) => $r->prize_id == $prize->id && $r->branch_id == $branch->id)?->total ?? 0);
+
                             $row[$prize->name.' (Actual)'] = $stock;
                             $row[$prize->name.' (Inicial)'] = $initial;
-                            $row[$prize->name.' (Entregados)'] = max(0, $initial - $stock);
+                            $row[$prize->name.' (Válidos Entregados)'] = $valid;
+                            $row[$prize->name.' (Invalidados)'] = $invalid;
+
                             $totalActual += $stock;
                             $totalInicial += $initial;
+                            $totalValidDelivered += $valid;
+                            $totalInvalidated += $invalid;
                         }
 
                         $row['TOTAL ACTUAL'] = $totalActual;
                         $row['TOTAL INICIAL'] = $totalInicial;
-                        $row['TOTAL ENTREGADOS'] = max(0, $totalInicial - $totalActual);
+                        $row['TOTAL VÁLIDOS ENTREGADOS'] = $totalValidDelivered;
+                        $row['TOTAL INVALIDADOS'] = $totalInvalidated;
 
                         return $row;
                     });
@@ -182,8 +208,9 @@ class StockMatrix extends Page
             ->mapWithKeys(fn ($item) => ["{$item->prize_id}.{$item->branch_id}" => (int) $item->stock])
             ->toArray();
 
-        // Calculate initial stock from additions in history
+        // Calculate initial stock from additions in history (excluding form invalidation restorations)
         $initialStockRecords = PrizeStockHistory::where('type', 'addition')
+            ->whereNull('form_id')
             ->select('prize_id', 'branch_id', DB::raw('SUM(quantity) as total_initial'))
             ->groupBy('prize_id', 'branch_id')
             ->get();
@@ -198,32 +225,83 @@ class StockMatrix extends Page
             }
         }
 
+        // Conteo de premios entregados válidos (formularios en used o delivered)
+        $validDeliveredRecords = FormModel::whereIn('status', ['used', 'delivered'])
+            ->whereNotNull('prize_id')
+            ->whereNotNull('branch_id')
+            ->select('prize_id', 'branch_id', DB::raw('COUNT(*) as total'))
+            ->groupBy('prize_id', 'branch_id')
+            ->get();
+
+        $validDeliveredMap = [];
+        foreach ($allBranches as $branch) {
+            foreach ($prizes as $prize) {
+                $key = "{$prize->id}.{$branch->id}";
+                $validDeliveredMap[$key] = (int) ($validDeliveredRecords->firstWhere(fn ($r) => $r->prize_id == $prize->id && $r->branch_id == $branch->id)?->total ?? 0);
+            }
+        }
+
+        // Conteo de premios anulados / invalidados
+        $invalidatedRecords = FormModel::where('status', 'invalidated')
+            ->whereNotNull('prize_id')
+            ->whereNotNull('branch_id')
+            ->select('prize_id', 'branch_id', DB::raw('COUNT(*) as total'))
+            ->groupBy('prize_id', 'branch_id')
+            ->get();
+
+        $invalidatedMap = [];
+        foreach ($allBranches as $branch) {
+            foreach ($prizes as $prize) {
+                $key = "{$prize->id}.{$branch->id}";
+                $invalidatedMap[$key] = (int) ($invalidatedRecords->firstWhere(fn ($r) => $r->prize_id == $prize->id && $r->branch_id == $branch->id)?->total ?? 0);
+            }
+        }
+
         // Calculate totals per prize
         $prizeTotals = [];
         $prizeInitialTotals = [];
+        $prizeValidDeliveredTotals = [];
+        $prizeInvalidatedTotals = [];
         foreach ($prizes as $prize) {
             $prizeTotals[$prize->id] = (int) $stockRecords->where('prize_id', $prize->id)->sum('stock');
             $sumInitial = 0;
+            $sumValid = 0;
+            $sumInv = 0;
             foreach ($allBranches as $branch) {
                 $sumInitial += $initialStockMap["{$prize->id}.{$branch->id}"] ?? 0;
+                $sumValid += $validDeliveredMap["{$prize->id}.{$branch->id}"] ?? 0;
+                $sumInv += $invalidatedMap["{$prize->id}.{$branch->id}"] ?? 0;
             }
             $prizeInitialTotals[$prize->id] = $sumInitial;
+            $prizeValidDeliveredTotals[$prize->id] = $sumValid;
+            $prizeInvalidatedTotals[$prize->id] = $sumInv;
         }
 
         $globalActualTotal = collect($prizeTotals)->sum();
         $globalInitialTotal = collect($prizeInitialTotals)->sum();
-        $globalConsumedTotal = max(0, $globalInitialTotal - $globalActualTotal);
+        $globalConsumedTotal = collect($prizeValidDeliveredTotals)->sum();
+        $globalInvalidatedTotal = collect($prizeInvalidatedTotals)->sum();
+
+        $totalAllInvalidatedForms = FormModel::where('status', 'invalidated')->count();
+        $invalidatedWithoutPrize = FormModel::where('status', 'invalidated')->whereNull('prize_id')->count();
 
         return [
             'prizes' => $prizes,
             'cities' => $cities,
             'stockMap' => $stockMap,
             'initialStockMap' => $initialStockMap,
+            'validDeliveredMap' => $validDeliveredMap,
+            'invalidatedMap' => $invalidatedMap,
             'prizeTotals' => $prizeTotals,
             'prizeInitialTotals' => $prizeInitialTotals,
+            'prizeValidDeliveredTotals' => $prizeValidDeliveredTotals,
+            'prizeInvalidatedTotals' => $prizeInvalidatedTotals,
             'globalActualTotal' => $globalActualTotal,
             'globalInitialTotal' => $globalInitialTotal,
             'globalConsumedTotal' => $globalConsumedTotal,
+            'globalInvalidatedTotal' => $globalInvalidatedTotal,
+            'totalAllInvalidatedForms' => $totalAllInvalidatedForms,
+            'invalidatedWithoutPrize' => $invalidatedWithoutPrize,
             'totalBranches' => $allBranches->count(),
         ];
     }

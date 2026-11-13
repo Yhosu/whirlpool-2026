@@ -49,11 +49,22 @@ class StatsOverview extends BaseWidget
         $pendingTotal = $registeredCount + $onlyPendingCount;
 
         $invalidatedCount = (clone $baseQuery)->where('status', 'invalidated')->count();
+        $invalidatedWithPrize = (clone $baseQuery)->where('status', 'invalidated')->whereNotNull('prize_id')->count();
+        $invalidatedWithoutPrize = (clone $baseQuery)->where('status', 'invalidated')->whereNull('prize_id')->count();
 
         $uniqueClients = (clone $baseQuery)->whereNotNull('ci_number')->distinct('ci_number')->count('ci_number');
 
-        $dismacCount = (clone $baseQuery)->where('type', 'dismac')->count();
-        $informalCount = (clone $baseQuery)->where('type', 'informal-market')->count();
+        $dismacQuery = (clone $baseQuery)->where('type', 'dismac');
+        $dismacTotal = (clone $dismacQuery)->count();
+        $dismacValid = (clone $dismacQuery)->whereIn('status', ['used', 'delivered'])->count();
+        $dismacInvalid = (clone $dismacQuery)->where('status', 'invalidated')->count();
+
+        $informalQuery = (clone $baseQuery)->where('type', 'informal-market');
+        $informalTotal = (clone $informalQuery)->count();
+        $informalValid = (clone $informalQuery)->whereIn('status', ['used', 'delivered'])->count();
+        $informalPending = (clone $informalQuery)->whereIn('status', ['registered', 'pending'])->count();
+        $informalInvalid = (clone $informalQuery)->where('status', 'invalidated')->count();
+        $informalInvalidNoPrize = (clone $informalQuery)->where('status', 'invalidated')->whereNull('prize_id')->count();
 
         $withVoucher = (clone $baseQuery)->whereNotNull('voucher')->count();
 
@@ -83,7 +94,7 @@ class StatsOverview extends BaseWidget
                 ->extraAttributes(['class' => 'flex flex-col items-center justify-center text-center']),
 
             Stat::make('Invalidados / Rechazados', $invalidatedCount)
-                ->description('Formularios no válidos')
+                ->description("{$invalidatedWithPrize} con premio | {$invalidatedWithoutPrize} sin premio")
                 ->descriptionIcon('heroicon-m-x-circle')
                 ->color('danger')
                 ->extraAttributes(['class' => 'flex flex-col items-center justify-center text-center']),
@@ -94,14 +105,14 @@ class StatsOverview extends BaseWidget
                 ->color('info')
                 ->extraAttributes(['class' => 'flex flex-col items-center justify-center text-center']),
 
-            Stat::make('Canal Dismac', $dismacCount)
-                ->description('Venta canal Dismac')
+            Stat::make('Canal Dismac (Ecommerce)', "{$dismacValid} Válidos")
+                ->description("{$dismacInvalid} inv. | Total: {$dismacTotal}")
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color('primary')
                 ->extraAttributes(['class' => 'flex flex-col items-center justify-center text-center']),
 
-            Stat::make('Mercado Informal', $informalCount)
-                ->description('Canal externo / informal')
+            Stat::make('Mercado Informal', "{$informalValid} Válidos")
+                ->description("{$informalInvalid} inv. ({$informalInvalidNoPrize} sin premio) | {$informalPending} pend.")
                 ->descriptionIcon('heroicon-m-building-storefront')
                 ->color('gray')
                 ->extraAttributes(['class' => 'flex flex-col items-center justify-center text-center']),
